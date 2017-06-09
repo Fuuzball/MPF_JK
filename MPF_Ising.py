@@ -37,8 +37,12 @@ def deltaE(X, J):
 
 def getH(X, J):
     N = X.shape[0]
-    W = np.array( [getW(J),]* N )
-    H = convolve(X, W, 'same')
+    W = np.array( getW(J) )
+    H = np.zeros_like(X)
+
+    for n in range(N):
+        H[n] = convolve(X[n], W, 'same') 
+
     return H
 
 def sampleX(J, D, N, burnIn, thin):
@@ -91,14 +95,13 @@ def learnJ( X ):
     print (minOut[0])
 
 #Set parameters
-N = 200 #Number of samples
-Dx = 7
+N = 100 #Number of samples
+Dx = 10
 D = (Dx, Dx) #Dimension of lattice
 burnIn = 100 * D[0] * D[1]
 thin = 10 * D[0] * D[1]
 
-J = [0.1, 0, 0, 0]
+J = [0.5, 0, 0, 0]
 X = sampleX(J, D, N, burnIn, thin)
-print(X)
 
 print(learnJ(X))
