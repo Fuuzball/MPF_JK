@@ -35,6 +35,12 @@ def deltaE(X, J):
     H = convolve(X, W, 'same')
     return (-2*X) * H
 
+def getH(X, J):
+    N = X.shape[0]
+    W = np.array( [getW(J),]* N )
+    H = convolve(X, W, 'same')
+    return H
+
 def sampleX(J, D, N, burnIn, thin):
     nSampleSteps = burnIn + (N) * thin
     Dx, Dy = D
@@ -50,7 +56,8 @@ def sampleX(J, D, N, burnIn, thin):
         dx = dxRand[i]
         dy = dyRand[i]
         d = [dx, dy]
-        dE = (deltaE(x, J)[0, dx, dy]) 
+        H = getH(x, J)
+        dE = (-2*x*H)[0, dx, dy]
         p = sigmoid(dE)
         
         if p > pRand[i]:
@@ -63,43 +70,35 @@ def sampleX(J, D, N, burnIn, thin):
     return X
 
 def KdK(X, J):
-    if len(X.shape) == 2:
-        D, N = X.shape
-    else:
-        D = X.shape[0]
-        N = 1
-
-    J = np.reshape(J, (D, D))
-    dE = deltaE(X, J)
+    dE = - 2 * X * getH(X, J)
     Kdn = np.exp(-0.5 * dE)
     K = Kdn.sum()
 
-    dK = - ((1 - 2*X) * Kdn) @ X.T
-    dK = 0.5 * (dK + dK.T)
-    dK = dK - np.diag(dK.diagonal())
+    dK = []
+    for j in np.eye(4):
+        dKdn = X * getH(X, j) * Kdn
+        dK.append(dKdn.sum())
 
-    dK = dK.reshape(-1)
-
-    return K, dK
+    return K, np.array(dK)
 
 def learnJ( X ):
-    D = np.shape(X)[0]
 
     #Get random initial J
-    J = getRandJ(D)
-    J = np.array(np.reshape(J, (-1)))
+    J = 2 * np.random.random(4) - 1
 
     fdf = lambda j: KdK(X, j)
     minOut = optimize.fmin_l_bfgs_b(fdf, J)
-    print (minOut[1:])
-    return np.reshape(minOut[0], (D, D))
+    print (minOut[0])
 
 #Set parameters
-N = 4 #Number of samples
-D = (5, 5) #Dimension of lattice
+N = 200 #Number of samples
+Dx = 7
+D = (Dx, Dx) #Dimension of lattice
 burnIn = 100 * D[0] * D[1]
 thin = 10 * D[0] * D[1]
 
-J = [-0.1, 0, 0, 0]
+J = [0.1, 0, 0, 0]
 X = sampleX(J, D, N, burnIn, thin)
 print(X)
+
+print(learnJ(X))
