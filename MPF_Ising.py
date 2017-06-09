@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pylab as plt
 from scipy.signal import convolve
 from scipy import optimize
+import time
 
 # Conventions: spins are symmetric: {-1,1}, J has vanishing diagonals, energy is E = 0.5 x.T @ J @ X
 
@@ -95,13 +96,17 @@ def learnJ( X ):
     print (minOut[0])
 
 #Set parameters
-N = 100 #Number of samples
-Dx = 10
+N = 50 #Number of samples
+Dx = 15
 D = (Dx, Dx) #Dimension of lattice
 burnIn = 100 * D[0] * D[1]
 thin = 10 * D[0] * D[1]
 
 J = [0.5, 0, 0, 0]
+
+print('Sampling ...')
+t0 = time.time()
 X = sampleX(J, D, N, burnIn, thin)
+print (time.time() - t0)
 
 print(learnJ(X))
