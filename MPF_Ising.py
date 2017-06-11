@@ -103,8 +103,26 @@ def learnJ( X ):
     minOut = optimize.fmin_l_bfgs_b(fdf, J)
     print (minOut[0])
 
+def stackX(X, ratio = 1.5, pad = 1):
+    N, Dx, Dy = X.shape
+    W = int(np.ceil(np.sqrt(ratio * N)))
+    H = int(np.ceil(N / W))
+
+    if H * W > N:
+        X = np.concatenate((X, np.zeros((H * W - N, Dx, Dy))))
+
+    padX = np.pad(X, ((0,0), (pad,pad), (pad,pad)), 'constant', constant_values = 0)
+    padX = np.pad(X, ((0,0), (pad,pad), (pad,pad)), 'constant', constant_values = 0)
+    print(W, H)
+    rows = []
+    for i in range(H):
+        rows.append(np.hstack((padX[i*W:(i+1)*W])))
+    Xstack = np.vstack(rows)
+    return Xstack
+
+
 #Set parameters
-N = 50 #Number of samples
+N = 10 #Number of samples
 Dx = 6
 D = (Dx, Dx) #Dimension of lattice
 burnIn = 100 * D[0] * D[1]
@@ -116,7 +134,11 @@ JK = [3,0,0,0,0]
 print('Sampling ...')
 t0 = time.time()
 X = sampleX(JK, D, N, burnIn, thin)
+
 print (time.time() - t0)
-print(X)
+
+plt.imshow(stackX(X), cmap = 'gray')
+plt.show()
+
 
 #print(learnJ(X))
