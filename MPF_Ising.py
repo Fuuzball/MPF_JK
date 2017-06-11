@@ -30,7 +30,7 @@ def getRandX(D, N = 1):
     X = np.floor(np.random.random( (N, Dx, Dy) ) * 2)
     return 2*X - 1
 
-def getHK(X):
+def getdEK(X):
     N = X.shape[0]
     dE = np.zeros_like(X)
     M = np.ones((2,2))
@@ -70,7 +70,7 @@ def sampleX(JK, D, N, burnIn, thin):
         dy = dyRand[i]
         d = [dx, dy]
         H = getH(x, J)
-        dE = (-2*x*H + K * getHK(x))[0, dx, dy]
+        dE = (-2*x*H + K * getdEK(x))[0, dx, dy]
         p = sigmoid(dE)
         
         if p > pRand[i]:
@@ -82,8 +82,11 @@ def sampleX(JK, D, N, burnIn, thin):
             X[(i - burnIn) // thin ] = x
     return X
 
-def KdK(X, J):
-    dE = - 2 * X * getH(X, J)
+def KdK(X, JK):
+    J = JK[:4]
+    K = JK[4]
+
+    dE = - 2 * X * getH(X, J) - 2 * K * getdEK(X)
     Kdn = np.exp(-0.5 * dE)
     K = Kdn.sum()
 
@@ -92,12 +95,15 @@ def KdK(X, J):
         dKdn = X * getH(X, j) * Kdn
         dK.append(dKdn.sum())
 
+    dKdn = X * getdEK(X) * Kdn
+    dK.append(dKdn.sum())
+
     return K, np.array(dK)
 
 def learnJ( X ):
 
     #Get random initial J
-    J = 2 * np.random.random(4) - 1
+    J = 2 * np.random.random(5) - 1
 
     fdf = lambda j: KdK(X, j)
     minOut = optimize.fmin_l_bfgs_b(fdf, J)
@@ -113,7 +119,6 @@ def stackX(X, ratio = 1.5, pad = 1):
 
     padX = np.pad(X, ((0,0), (pad,pad), (pad,pad)), 'constant', constant_values = 0)
     padX = np.pad(X, ((0,0), (pad,pad), (pad,pad)), 'constant', constant_values = 0)
-    print(W, H)
     rows = []
     for i in range(H):
         rows.append(np.hstack((padX[i*W:(i+1)*W])))
@@ -122,14 +127,14 @@ def stackX(X, ratio = 1.5, pad = 1):
 
 
 #Set parameters
-N = 10 #Number of samples
-Dx = 6
+N = 50 #Number of samples
+Dx = 5
 D = (Dx, Dx) #Dimension of lattice
 burnIn = 100 * D[0] * D[1]
 thin = 10 * D[0] * D[1]
 
 #J = [0.5, 0, 0, 0]
-JK = [3,0,0,0,0]
+JK = [0,0,0,0,1]
 
 print('Sampling ...')
 t0 = time.time()
@@ -137,8 +142,8 @@ X = sampleX(JK, D, N, burnIn, thin)
 
 print (time.time() - t0)
 
-plt.imshow(stackX(X), cmap = 'gray')
-plt.show()
+#plt.imshow(stackX(X), cmap = 'gray')
+#plt.show()
 
 
-#print(learnJ(X))
+print(learnJ(X))
