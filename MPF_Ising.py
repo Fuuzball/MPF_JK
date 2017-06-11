@@ -30,11 +30,17 @@ def getRandX(D, N = 1):
     X = np.floor(np.random.random( (N, Dx, Dy) ) * 2)
     return 2*X - 1
 
-def deltaE(X, J):
+def getHK(X):
     N = X.shape[0]
-    W = np.array( [getW(J),]* N )
-    H = convolve(X, W, 'same')
-    return (-2*X) * H
+    dE = np.zeros_like(X)
+    M = np.ones((2,2))
+    for n in range(N):
+        XM = convolve(X[n], M, 'valid')
+        Q = np.ones_like(XM)
+        Q[np.abs(XM) == 2] = -1
+        dE[n] = -2 * convolve(Q, M, 'full')
+
+    return dE
 
 def getH(X, J):
     N = X.shape[0]
@@ -46,9 +52,11 @@ def getH(X, J):
 
     return H
 
-def sampleX(J, D, N, burnIn, thin):
+def sampleX(JK, D, N, burnIn, thin):
     nSampleSteps = burnIn + (N) * thin
     Dx, Dy = D
+    J = JK[:4]
+    K = JK[4]
 
     dxRand = np.random.randint(Dx, size = (nSampleSteps))
     dyRand = np.random.randint(Dy, size = (nSampleSteps))
@@ -62,7 +70,7 @@ def sampleX(J, D, N, burnIn, thin):
         dy = dyRand[i]
         d = [dx, dy]
         H = getH(x, J)
-        dE = (-2*x*H)[0, dx, dy]
+        dE = (-2*x*H + K * getHK(x))[0, dx, dy]
         p = sigmoid(dE)
         
         if p > pRand[i]:
@@ -97,16 +105,18 @@ def learnJ( X ):
 
 #Set parameters
 N = 50 #Number of samples
-Dx = 15
+Dx = 6
 D = (Dx, Dx) #Dimension of lattice
 burnIn = 100 * D[0] * D[1]
 thin = 10 * D[0] * D[1]
 
-J = [0.5, 0, 0, 0]
+#J = [0.5, 0, 0, 0]
+JK = [3,0,0,0,0]
 
 print('Sampling ...')
 t0 = time.time()
-X = sampleX(J, D, N, burnIn, thin)
+X = sampleX(JK, D, N, burnIn, thin)
 print (time.time() - t0)
+print(X)
 
-print(learnJ(X))
+#print(learnJ(X))
