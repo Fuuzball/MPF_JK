@@ -134,21 +134,42 @@ D = (Dx, Dx) #Dimension of lattice
 burnIn = 100 * D[0] * D[1]
 thin = 10 * D[0] * D[1]
 
-for j0 in np.arange(-10, 10):
+if True:
+    for j0 in np.arange(-10, 10):
+        if j0 < 0:
+            str0 = 'n' +  str(-j0)
+        else:
+            str0 = str(j0)
+        for j1 in np.arange(-10, 10):
+            if j1 < 0:
+                str1 = 'n' +  str(-j1)
+            else:
+                str1 = str(j1)
+            fname = 'j12_' + str0 + '_' + str1 + '.npy'
+            JK = [j0/10., j1/10., 0, 0, 0]
+            X = sampleX(JK, D, N, burnIn, thin)
+            print('Saving ' + fname + '...')
+            np.save(fname, X) 
+
+JKest = np.zeros((12, 21, 5))
+
+for j0 in np.arange(-10, 1):
     if j0 < 0:
         str0 = 'n' +  str(-j0)
     else:
         str0 = str(j0)
     for j1 in np.arange(-10, 10):
+        i = j0 + 10
+        j = j1 + 10
         if j1 < 0:
             str1 = 'n' +  str(-j1)
         else:
             str1 = str(j1)
-        fname = 'j12_' + str0 + '_' + str1 + '.npy'
-        JK = [j0, j1, 0, 0, 0]
-        X = sampleX(JK, D, N, burnIn, thin)
-        print('Saving ' + fname + '...')
-        np.save(fname, X)
+        fname = './data/j12_' + str0 + '_' + str1 + '.npy'
+        X = np.load(fname) 
+        plt.imshow(stackX(X), cmap = 'gray')
+        plt.show()
+        JKest[i, j] = learnJ(X)
+        print(i,j, JKest[i,j])
 
-#plt.imshow(stackX(X), cmap = 'gray')
-#plt.show()
+
