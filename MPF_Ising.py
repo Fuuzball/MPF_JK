@@ -86,7 +86,7 @@ def KdK(X, JK):
     J = JK[:4]
     K = JK[4]
 
-    dE = - 2 * X * getH(X, J) - 2 * K * getdEK(X)
+    dE = - 2 * X * getH(X, J) + K * getdEK(X)
     Kdn = np.exp(-0.5 * dE)
     K = Kdn.sum()
 
@@ -95,10 +95,13 @@ def KdK(X, JK):
         dKdn = X * getH(X, j) * Kdn
         dK.append(dKdn.sum())
 
-    dKdn = X * getdEK(X) * Kdn
+    dKdn = -0.5 * getdEK(X) * Kdn
     dK.append(dKdn.sum())
+    dK = np.array(dK)
 
-    return K, np.array(dK)
+    print(np.sqrt(dK.dot(dK)))
+
+    return K, dK
 
 def learnJ( X ):
 
@@ -128,22 +131,27 @@ def stackX(X, ratio = 1.5, pad = 1):
 
 #Set parameters
 N = 50 #Number of samples
-Dx = 5
+Dx = 10
 D = (Dx, Dx) #Dimension of lattice
 burnIn = 100 * D[0] * D[1]
 thin = 10 * D[0] * D[1]
 
-#J = [0.5, 0, 0, 0]
-JK = [0,0,0,0,1]
+JK = [0,0,0,0, 0.5]
 
-print('Sampling ...')
-t0 = time.time()
-X = sampleX(JK, D, N, burnIn, thin)
-
-print (time.time() - t0)
+sample = False
+if sample:
+    print('Sampling...')
+    t0 = time.time()
+    X = sampleX(JK, D, N, burnIn, thin)
+    print (time.time() - t0)
+    print('Writing to file...')
+    np.save('./Xsample.npy', X)
+else:
+    print('Loading file')
+    X = np.load('./Xsample.npy')
 
 #plt.imshow(stackX(X), cmap = 'gray')
 #plt.show()
-
+#print(KdK(X, JK)) 
 
 print(learnJ(X))
