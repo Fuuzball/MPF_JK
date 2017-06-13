@@ -99,8 +99,6 @@ def KdK(X, JK):
     dK.append(dKdn.sum())
     dK = np.array(dK)
 
-    print(np.sqrt(dK.dot(dK)))
-
     return K, dK
 
 def learnJ( X ):
@@ -110,7 +108,7 @@ def learnJ( X ):
 
     fdf = lambda j: KdK(X, j)
     minOut = optimize.fmin_l_bfgs_b(fdf, J)
-    print (minOut[0])
+    return np.array(minOut[0])
 
 def stackX(X, ratio = 1.5, pad = 1):
     N, Dx, Dy = X.shape
@@ -136,22 +134,21 @@ D = (Dx, Dx) #Dimension of lattice
 burnIn = 100 * D[0] * D[1]
 thin = 10 * D[0] * D[1]
 
-JK = [0,0,0,0, 0.5]
-
-sample = False
-if sample:
-    print('Sampling...')
-    t0 = time.time()
-    X = sampleX(JK, D, N, burnIn, thin)
-    print (time.time() - t0)
-    print('Writing to file...')
-    np.save('./Xsample.npy', X)
-else:
-    print('Loading file')
-    X = np.load('./Xsample.npy')
+for j0 in np.arange(-10, 10):
+    if j0 < 0:
+        str0 = 'n' +  str(-j0)
+    else:
+        str0 = str(j0)
+    for j1 in np.arange(-10, 10):
+        if j1 < 0:
+            str1 = 'n' +  str(-j1)
+        else:
+            str1 = str(j1)
+        fname = 'j12_' + str0 + '_' + str1 + '.npy'
+        JK = [j0, j1, 0, 0, 0]
+        X = sampleX(JK, D, N, burnIn, thin)
+        print('Saving ' + fname + '...')
+        np.save(fname, X)
 
 #plt.imshow(stackX(X), cmap = 'gray')
 #plt.show()
-#print(KdK(X, JK)) 
-
-print(learnJ(X))
