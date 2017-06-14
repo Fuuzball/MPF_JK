@@ -1,3 +1,4 @@
+from __future__ import division
 import numpy as np
 import matplotlib.pylab as plt
 import json
@@ -125,10 +126,43 @@ def stackX(X, ratio = 1.5, pad = 1):
     Xstack = np.vstack(rows)
     return Xstack
 
+def JKSweep(params, sweepIndex, sweep1, sweep2, JK0):
+
+    s1 = sweep1.shape[0]
+    s2 = sweep2.shape[0]
+    N = params['N']
+    Dx = params['Dx']
+    Dy = params['Dy']
+
+    JK = np.array(JK0)
+    samples = np.zeros((s1, s2, N, Dx, Dy)) 
+
+    times = []
+    totaliters = s1 * s2
+    iters = 0
+
+    for j1 in range(s1):
+        for j2 in range(s2):
+            J1 = sweep1[j1]
+            J2 = sweep2[j2]
+            JK[sweepIndex] = (J1, J2) 
+            t0 = time.time()
+            samples[j1, j2] = sampleX(JK, D, N, burnIn, thin)
+            iters += 1
+            times.append(time.time() - t0)
+            meanT = sum(times) / len(times)
+            tLeft = (totaliters - iters) * meanT
+            print ('Finished sampling at ', (J1, J2), 'approx. time remaining: ', time.strftime("%H:%M:%S", time.gmtime(tLeft)))
+
+    data = {}
+    data['params'] = params 
+    data['samples'] = samples.tolist()
+
+    return data
 
 #Set parameters
-N = 5 #Number of samples
-Dx, Dy = 4, 4
+N = 20 #Number of samples
+Dx, Dy = 10, 10
 D = (Dx, Dy) #Dimension of lattice
 burnIn = 100 * D[0] * D[1]
 thin = 10 * D[0] * D[1]
@@ -141,28 +175,21 @@ params = {
     'thin' : thin
     }
 
-data = {}
-data['params'] = params
-if False:
-    samples = np.zeros((21, 21, N, Dx, Dy))
+sweepIndex = [0, 1]
+sweep1 = np.arange(-1, 1, .1)
+sweep2 = np.arange(-1, 1, .1)
+JK0 = [0,0,0,0,0]
 
-    for j1 in range(21):
-        for j2 in range(21):
-            J1 = (j1 - 10)/10.0
-            J2 = (j2 - 10)/10.0
-            print (J1, J2)
-            JK = [J1, J2, 0, 0, 0]
-            samples[j1, j2] = sampleX(JK, D, N, burnIn, thin)
+#data =JKSweep(params, sweepIndex, sweep1, sweep2, JK0)
 
-    data['samples'] = samples.tolist()
-    with open('./data/sampleJ12.json', 'w') as f:
-        json.dump(data, f)
+#with open('./data/sampleJ12_20_10_10.json', 'w') as f:
+#    json.dump(data, f)
 
-with open('./data/sampleJ12.json') as f:
+with open('./data/sampleJ12_20_10_10.json') as f:
     data = json.load(f)
 
 Xs = np.array(data['samples'])
-plt.imshow(stackX(Xs[11,11]))
+print(Xs.shape)
 plt.show()
 
 
