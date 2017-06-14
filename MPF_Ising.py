@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pylab as plt
+import json
 from scipy.signal import convolve
 from scipy import optimize
 import time
@@ -101,9 +102,7 @@ def KdK(X, JK):
 
     return K, dK
 
-def learnJ( X ):
-
-    #Get random initial J
+def learnJ( X ): 
     J = 2 * np.random.random(5) - 1
 
     fdf = lambda j: KdK(X, j)
@@ -128,48 +127,42 @@ def stackX(X, ratio = 1.5, pad = 1):
 
 
 #Set parameters
-N = 50 #Number of samples
-Dx = 10
-D = (Dx, Dx) #Dimension of lattice
+N = 5 #Number of samples
+Dx, Dy = 4, 4
+D = (Dx, Dy) #Dimension of lattice
 burnIn = 100 * D[0] * D[1]
 thin = 10 * D[0] * D[1]
 
-if True:
-    for j0 in np.arange(-10, 10):
-        if j0 < 0:
-            str0 = 'n' +  str(-j0)
-        else:
-            str0 = str(j0)
-        for j1 in np.arange(-10, 10):
-            if j1 < 0:
-                str1 = 'n' +  str(-j1)
-            else:
-                str1 = str(j1)
-            fname = 'j12_' + str0 + '_' + str1 + '.npy'
-            JK = [j0/10., j1/10., 0, 0, 0]
-            X = sampleX(JK, D, N, burnIn, thin)
-            print('Saving ' + fname + '...')
-            np.save(fname, X) 
+params = {
+    'N' : N,
+    'Dx' : Dx,
+    'Dy' : Dy,
+    'burnIn' : burnIn,
+    'thin' : thin
+    }
 
-JKest = np.zeros((12, 21, 5))
+data = {}
+data['params'] = params
+if False:
+    samples = np.zeros((21, 21, N, Dx, Dy))
 
-for j0 in np.arange(-10, 1):
-    if j0 < 0:
-        str0 = 'n' +  str(-j0)
-    else:
-        str0 = str(j0)
-    for j1 in np.arange(-10, 10):
-        i = j0 + 10
-        j = j1 + 10
-        if j1 < 0:
-            str1 = 'n' +  str(-j1)
-        else:
-            str1 = str(j1)
-        fname = './data/j12_' + str0 + '_' + str1 + '.npy'
-        X = np.load(fname) 
-        plt.imshow(stackX(X), cmap = 'gray')
-        plt.show()
-        JKest[i, j] = learnJ(X)
-        print(i,j, JKest[i,j])
+    for j1 in range(21):
+        for j2 in range(21):
+            J1 = (j1 - 10)/10.0
+            J2 = (j2 - 10)/10.0
+            print (J1, J2)
+            JK = [J1, J2, 0, 0, 0]
+            samples[j1, j2] = sampleX(JK, D, N, burnIn, thin)
+
+    data['samples'] = samples.tolist()
+    with open('./data/sampleJ12.json', 'w') as f:
+        json.dump(data, f)
+
+with open('./data/sampleJ12.json') as f:
+    data = json.load(f)
+
+Xs = np.array(data['samples'])
+plt.imshow(stackX(Xs[11,11]))
+plt.show()
 
 
