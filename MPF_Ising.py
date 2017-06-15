@@ -8,7 +8,7 @@ import time
 
 # Conventions: spins are symmetric: {-1,1}, J has vanishing diagonals, energy is E = 0.5 x.T @ J @ X
 
-np.set_printoptions( precision = 3 )
+np.set_printoptions( precision = 2 )
 epsilon = 1E-10
 Seed = 8
 if Seed:
@@ -126,6 +126,31 @@ def stackX(X, ratio = 1.5, pad = 1):
     Xstack = np.vstack(rows)
     return Xstack
 
+def showPhase(Xs, index = 0):
+    plt.imshow(
+            stackX(Xs[:,index,:,:], 1)
+            )
+    plt.show()
+
+def loadSample(fileName):
+
+    with open(fileName) as f:
+        data = json.load(f)
+
+    JKList = np.array(data['JKList'])
+    Xs = np.array(data['samples'])
+
+    return Xs, JKList
+
+def saveJKest(fileName):
+    JKest = [] 
+    for (JK, X) in zip(JKList, Xs):
+        JKest.append(learnJ(X))
+
+    JKest = np.array(JKest)
+    np.save(fileName, JKest)
+    return JKest
+
 def JKSweep(params, JKList, outfile = None):
 
     N = params['N']
@@ -172,10 +197,10 @@ D = (Dx, Dy) #Dimension of lattice
 burnIn = 100 * D[0] * D[1]
 thin = 10 * D[0] * D[1]
 
-start = -1
-stop = 1
-step = 1
-JKList = [(j1, j2, 0, 0, 0) for j1 in range(start, stop + 1, step) for j2 in range(start, stop + 1, step)]
+j1List = np.arange(-.3, .3, .03).tolist()
+j2List = np.arange(-.3, .3, .03).tolist()
+
+JKList = [(j1, j2, 0, 0, 0) for j1 in j1List for j2 in j2List ]
 
 params = {
     'N' : N,
@@ -186,14 +211,17 @@ params = {
     }
 
 #data = JKSweep(params, JKList, './data/sampleTest.json')
+Xs, JKest = loadSample('./data/sampleTest.json')
 
-with open('./data/sampleTest.json') as f:
-    data = json.load(f)
+JKList = np.array(JKList)
 
-Xs = np.array(data['samples'])
-print (JKList)
-plt.imshow(
-        stackX(Xs[:,0,:,:], 1)
-        )
+#saveJKest('./data/JKest.npy')
+
+JKest = np.load('./data/JKest.npy')
+
+plt.subplot(121)
+plt.imshow((JKest[:,0] - JKList[:,0]).reshape((20,20)))
+plt.subplot(122)
+plt.imshow((JKest[:,1] - JKList[:,1]).reshape((20,20)))
 plt.show()
 
