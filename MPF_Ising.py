@@ -126,11 +126,15 @@ def stackX(X, ratio = 1.5, pad = 1):
     Xstack = np.vstack(rows)
     return Xstack
 
-def showPhase(Xs, index = 0):
+def plotPhase(Xs, index = 0):
+    plt.figure(figsize = (20,20))
     plt.imshow(
-            stackX(Xs[:,index,:,:], 1)
+            stackX(Xs[:,index,:,:], 1),
+            cmap = 'gray'
             )
+
     plt.show()
+
 
 def loadSample(fileName):
 
@@ -139,6 +143,7 @@ def loadSample(fileName):
 
     JKList = np.array(data['JKList'])
     Xs = np.array(data['samples'])
+
 
     return Xs, JKList
 
@@ -229,7 +234,7 @@ params = {
     }
 
 
-dirStr = './data/JK_30/'
+dirStr = './data/J12_30/'
 sampleStr = dirStr + 'sample.json'
 JKestStr = dirStr + 'JKest.npy'
 
@@ -242,5 +247,6 @@ JKest = np.load(JKestStr)
 
 j1, j2 = 0, 4
 jX, jY = 20, 20
+#plotError(JKList, JKest, j1, j2, jX, jY)
 
-plotError(JKList, JKest, j1, j2, jX, jY)
+plotPhase(Xs, 0)
