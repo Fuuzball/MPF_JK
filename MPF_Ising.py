@@ -126,37 +126,42 @@ def stackX(X, ratio = 1.5, pad = 1):
     Xstack = np.vstack(rows)
     return Xstack
 
-def JKSweep(params, sweepIndex, sweep1, sweep2, JK0):
+def JKSweep(params, JKList, outfile = None):
 
-    s1 = sweep1.shape[0]
-    s2 = sweep2.shape[0]
     N = params['N']
     Dx = params['Dx']
     Dy = params['Dy']
 
-    JK = np.array(JK0)
-    samples = np.zeros((s1, s2, N, Dx, Dy)) 
+    samples = []
 
     times = []
-    totaliters = s1 * s2
+    totaliters = len(JKList)
     iters = 0
+    tStart = time.time()
 
-    for j1 in range(s1):
-        for j2 in range(s2):
-            J1 = sweep1[j1]
-            J2 = sweep2[j2]
-            JK[sweepIndex] = (J1, J2) 
-            t0 = time.time()
-            samples[j1, j2] = sampleX(JK, D, N, burnIn, thin)
-            iters += 1
-            times.append(time.time() - t0)
-            meanT = sum(times) / len(times)
-            tLeft = (totaliters - iters) * meanT
-            print ('Finished sampling at ', (J1, J2), 'approx. time remaining: ', time.strftime("%H:%M:%S", time.gmtime(tLeft)))
+    for jk in JKList:
+        t0 = time.time()
+        #samples[j1, j2] = sampleX(JK, D, N, burnIn, thin)
+        samples.append(sampleX(jk, D, N, burnIn, thin).tolist())
+        iters += 1
+        times.append(time.time() - t0)
+        meanT = sum(times) / len(times)
+        tLeft = (totaliters - iters) * meanT
+
+        print ('Finished sampling at ', jk, 'approx. time remaining: ', time.strftime("%H:%M:%S", time.gmtime(tLeft)), '. Time elapsed: ', time.strftime("%H:%M:%S", time.gmtime(time.time() - tStart))) 
 
     data = {}
+    
+
     data['params'] = params 
-    data['samples'] = samples.tolist()
+    data['JKList'] = JKList 
+    print(JKList)
+    data['samples'] = samples
+
+    if outfile:
+        with open(outfile, 'w') as f:
+            json.dump(data, f)
+
 
     return data
 
@@ -167,29 +172,28 @@ D = (Dx, Dy) #Dimension of lattice
 burnIn = 100 * D[0] * D[1]
 thin = 10 * D[0] * D[1]
 
+start = -1
+stop = 1
+step = 1
+JKList = [(j1, j2, 0, 0, 0) for j1 in range(start, stop + 1, step) for j2 in range(start, stop + 1, step)]
+
 params = {
     'N' : N,
     'Dx' : Dx,
     'Dy' : Dy,
     'burnIn' : burnIn,
-    'thin' : thin
+    'thin' : thin,
     }
 
-sweepIndex = [0, 1]
-sweep1 = np.arange(-1, 1, .1)
-sweep2 = np.arange(-1, 1, .1)
-JK0 = [0,0,0,0,0]
+#data = JKSweep(params, JKList, './data/sampleTest.json')
 
-#data =JKSweep(params, sweepIndex, sweep1, sweep2, JK0)
-
-#with open('./data/sampleJ12_20_10_10.json', 'w') as f:
-#    json.dump(data, f)
-
-with open('./data/sampleJ12_20_10_10.json') as f:
+with open('./data/sampleTest.json') as f:
     data = json.load(f)
 
 Xs = np.array(data['samples'])
-print(Xs.shape)
+print (JKList)
+plt.imshow(
+        stackX(Xs[:,0,:,:], 1)
+        )
 plt.show()
-
 
