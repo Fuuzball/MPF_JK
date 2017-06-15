@@ -142,13 +142,14 @@ def loadSample(fileName):
 
     return Xs, JKList
 
-def saveJKest(fileName):
+def JKestSweep(Xs, fileName = None):
     JKest = [] 
-    for (JK, X) in zip(JKList, Xs):
+    for X in Xs:
         JKest.append(learnJ(X))
 
     JKest = np.array(JKest)
-    np.save(fileName, JKest)
+    if fileName:
+        np.save(fileName, JKest)
     return JKest
 
 def JKSweep(params, JKList, outfile = None):
@@ -190,6 +191,23 @@ def JKSweep(params, JKList, outfile = None):
 
     return data
 
+def plotError(JKList, JKest, j1, j2, jX, jY):
+    JKerr = JKest - JKList 
+    toPlot = [
+            JKList[:, j1], JKest[:, j1], JKerr[:, j1],
+            JKList[:, j2], JKest[:, j2], JKerr[:, j2],
+            ]
+    cm = 'RdBu'
+
+    plt.figure(figsize= (18,12))
+    for i in range(6):
+        plt.subplot(2, 3, i + 1)
+        aMax = np.abs(toPlot[i]).max()
+        plt.imshow(toPlot[i].reshape((jX, jY)), cmap = cm, vmin = -aMax, vmax = aMax)
+        plt.colorbar()
+
+    plt.show()
+
 #Set parameters
 N = 20 #Number of samples
 Dx, Dy = 10, 10
@@ -210,18 +228,19 @@ params = {
     'thin' : thin,
     }
 
-#data = JKSweep(params, JKList, './data/sampleTest.json')
-Xs, JKest = loadSample('./data/sampleTest.json')
 
-JKList = np.array(JKList)
+dirStr = './data/JK_30/'
+sampleStr = dirStr + 'sample.json'
+JKestStr = dirStr + 'JKest.npy'
 
-#saveJKest('./data/JKest.npy')
+#data = JKSweep(params, JKList, './data/sampleJK.json')
+Xs, JKList = loadSample(sampleStr) #Load X from existing sample
 
-JKest = np.load('./data/JKest.npy')
 
-plt.subplot(121)
-plt.imshow((JKest[:,0] - JKList[:,0]).reshape((20,20)))
-plt.subplot(122)
-plt.imshow((JKest[:,1] - JKList[:,1]).reshape((20,20)))
-plt.show()
+#JKest = JKestSweep(Xs, JKestStr)
+JKest = np.load(JKestStr)
 
+j1, j2 = 0, 4
+jX, jY = 20, 20
+
+plotError(JKList, JKest, j1, j2, jX, jY)
