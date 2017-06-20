@@ -5,6 +5,7 @@ import json
 from scipy.signal import convolve
 from scipy import optimize
 import time
+import os
 
 # Conventions: spins are symmetric: {-1,1}, J has vanishing diagonals, energy is E = 0.5 x.T @ J @ X
 
@@ -135,15 +136,15 @@ def plotPhase(Xs, index = 0):
 
     plt.show()
 
+def loadSample(dirStr): 
+    paramFile = dirStr + 'param.json'
+    sampleFile = dirStr + 'sample.npy'
 
-def loadSample(fileName):
-
-    with open(fileName) as f:
-        data = json.load(f)
-
+    with open(paramFile) as f:
+        data = json.load(f) 
     JKList = np.array(data['JKList'])
-    Xs = np.array(data['samples'])
-
+    #Xs = np.array(data['samples'])
+    Xs = np.load(sampleFile)
 
     return Xs, JKList
 
@@ -157,11 +158,25 @@ def JKestSweep(Xs, fileName = None):
         np.save(fileName, JKest)
     return JKest
 
-def JKSweep(params, JKList, outfile = None):
+def JKSweep(N, D, burnIn, thin, JKList, dirStr = None):
+    try:
+        os.mkdir(dirStr)
+    except FileExistsError:
+        while True:
+            res = input('Directory already exsists, write sample into same directory anyway? Y/N:')
+            if res == 'y' or res == 'Y':
+                break
+            if res == 'n' or res == 'N':
+                return
 
-    N = params['N']
-    Dx = params['Dx']
-    Dy = params['Dy']
+
+    params = {
+        'N' : N,
+        'Dx' : Dx,
+        'Dy' : Dy,
+        'burnIn' : burnIn,
+        'thin' : thin,
+        } 
 
     samples = []
 
@@ -173,7 +188,7 @@ def JKSweep(params, JKList, outfile = None):
     for jk in JKList:
         t0 = time.time()
         #samples[j1, j2] = sampleX(JK, D, N, burnIn, thin)
-        samples.append(sampleX(jk, D, N, burnIn, thin).tolist())
+        samples.append(sampleX(jk, D, N, burnIn, thin))
         iters += 1
         times.append(time.time() - t0)
         meanT = sum(times) / len(times)
@@ -181,20 +196,21 @@ def JKSweep(params, JKList, outfile = None):
 
         print ('Finished sampling at ', jk, 'approx. time remaining: ', time.strftime("%H:%M:%S", time.gmtime(tLeft)), '. Time elapsed: ', time.strftime("%H:%M:%S", time.gmtime(time.time() - tStart))) 
 
-    data = {}
-    
-
+    data = {} 
     data['params'] = params 
     data['JKList'] = JKList 
     print(JKList)
-    data['samples'] = samples
+    #data['samples'] = samples
+    samples = np.array(samples)
 
-    if outfile:
-        with open(outfile, 'w') as f:
-            json.dump(data, f)
+    if dirStr:
+        paramFile = dirStr + 'param.json'
+        sampleFile = dirStr + 'sample.npy'
+        with open(paramFile, 'w') as f:
+            json.dump(data, f) 
+        np.save(sampleFile, samples) 
 
-
-    return data
+    return data, sample
 
 def plotError(JKList, JKest, j1, j2, jX, jY):
     JKerr = JKest - JKList 
@@ -220,33 +236,22 @@ D = (Dx, Dy) #Dimension of lattice
 burnIn = 100 * D[0] * D[1]
 thin = 10 * D[0] * D[1]
 
-j1List = np.arange(-.3, .3, .03).tolist()
-j2List = np.arange(-.3, .3, .03).tolist()
+for N in [10, 20, 30, 50, 100, 200]:
+    print ("N = ", N)
+    dirStr = './data/diag_' + str(N) + '/'
+    sampleStr = dirStr + 'sample.json'
+    JKestStr = dirStr + 'JKest.npy' 
 
-JKList = [(j1, j2, 0, 0, 0) for j1 in j1List for j2 in j2List ]
+    JKList = [(j, 0, 0, 0, j) for j in np.arange(0, 0.3, 0.03)]
 
-params = {
-    'N' : N,
-    'Dx' : Dx,
-    'Dy' : Dy,
-    'burnIn' : burnIn,
-    'thin' : thin,
-    }
-
-
-dirStr = './data/J12_30/'
-sampleStr = dirStr + 'sample.json'
-JKestStr = dirStr + 'JKest.npy'
-
-#data = JKSweep(params, JKList, './data/sampleJK.json')
-Xs, JKList = loadSample(sampleStr) #Load X from existing sample
-
+    data = JKSweep(N, D, burnIn, thin, JKList, dirStr)
+#Xs, JKList = loadSample(dirStr) #Load X from existing sample 
 
 #JKest = JKestSweep(Xs, JKestStr)
-JKest = np.load(JKestStr)
+#JKest = np.load(JKestStr)
 
-j1, j2 = 0, 4
-jX, jY = 20, 20
+#j1, j2 = 0, 4
+#jX, jY = 20, 20
 #plotError(JKList, JKest, j1, j2, jX, jY)
 
-plotPhase(Xs, 0)
+#plotPhase(Xs, 0)
