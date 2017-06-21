@@ -9,7 +9,7 @@ import os
 
 # Conventions: spins are symmetric: {-1,1}, J has vanishing diagonals, energy is E = 0.5 x.T @ J @ X
 
-np.set_printoptions( precision = 2 )
+np.set_printoptions( precision = 3 )
 epsilon = 1E-10
 Seed = 8
 if Seed:
@@ -210,7 +210,7 @@ def JKSweep(N, D, burnIn, thin, JKList, dirStr = None):
             json.dump(data, f) 
         np.save(sampleFile, samples) 
 
-    return data, sample
+    return data, samples
 
 def plotError(JKList, JKest, j1, j2, jX, jY):
     JKerr = JKest - JKList 
@@ -238,17 +238,18 @@ thin = 10 * D[0] * D[1]
 
 for N in [10, 20, 30, 50, 100, 200]:
     print ("N = ", N)
-    dirStr = './data/diag_' + str(N) + '/'
+    dirStr = './data/diag5_' + str(N) + '/'
     sampleStr = dirStr + 'sample.json'
     JKestStr = dirStr + 'JKest.npy' 
 
-    JKList = [(j, 0, 0, 0, j) for j in np.arange(0, 0.3, 0.03)]
+    JKList = [(j, 0, 0, 0, j) for j in np.arange(0, 0.5, 0.05)]
 
-    data = JKSweep(N, D, burnIn, thin, JKList, dirStr)
-#Xs, JKList = loadSample(dirStr) #Load X from existing sample 
+    #data = JKSweep(N, D, burnIn, thin, JKList, dirStr)
+    Xs, JKList = loadSample(dirStr) #Load X from existing sample 
 
-#JKest = JKestSweep(Xs, JKestStr)
-#JKest = np.load(JKestStr)
+    #JKest = JKestSweep(Xs, JKestStr)
+    JKest = np.load(JKestStr)
+    print (np.sqrt((JKest - JKList)**2).mean(1))
 
 #j1, j2 = 0, 4
 #jX, jY = 20, 20
