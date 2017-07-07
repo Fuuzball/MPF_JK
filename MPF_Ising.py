@@ -199,7 +199,6 @@ def JKSweep(N, D, burnIn, thin, JKList, dirStr = None):
     data = {} 
     data['params'] = params 
     data['JKList'] = JKList 
-    print(JKList)
     #data['samples'] = samples
     samples = np.array(samples)
 
@@ -230,26 +229,40 @@ def plotError(JKList, JKest, j1, j2, jX, jY):
     plt.show()
 
 #Set parameters
-N = 20 #Number of samples
+N = 500 #Number of samples
 Dx, Dy = 10, 10
 D = (Dx, Dy) #Dimension of lattice
 burnIn = 100 * D[0] * D[1]
 thin = 10 * D[0] * D[1]
 
-for N in [10, 20, 30, 50, 100, 200]:
-    print ("N = ", N)
-    dirStr = './data/diag5_' + str(N) + '/'
-    sampleStr = dirStr + 'sample.json'
-    JKestStr = dirStr + 'JKest.npy' 
+dirStr = './data/diag_500/'
+sampleStr = dirStr + 'sample.json'
+JKestStr = dirStr + 'JKest.npy' 
 
-    JKList = [(j, 0, 0, 0, j) for j in np.arange(0, 0.5, 0.05)]
+JKList = [(j, 0, 0, 0, j) for j in np.arange(0, 0.5, 0.1)]
 
-    #data = JKSweep(N, D, burnIn, thin, JKList, dirStr)
-    Xs, JKList = loadSample(dirStr) #Load X from existing sample 
+#data = JKSweep(N, D, burnIn, thin, JKList, dirStr)
+Xs, JKList = loadSample(dirStr) #Load X from existing sample 
 
-    #JKest = JKestSweep(Xs, JKestStr)
-    JKest = np.load(JKestStr)
-    print (np.sqrt((JKest - JKList)**2).mean(1))
+#JKest = JKestSweep(Xs, JKestStr)
+NList = [10, 20, 30, 50, 80, 100, 200, 300, 500]
+lN = len(NList)
+JKestList = np.zeros((lN, 5, 5))
+for i in range(lN):
+    print(i)
+    break
+    JKestList[i] = JKestSweep(Xs[:, :NList[i], :, :])
+
+#np.save(dirStr+'JKestList.npy', JKestList)
+JKestList = np.load(dirStr+'JKestList.npy')
+#JKest = np.load(JKestStr)
+
+plt.plot(NList, JKestList[:,:,0])
+plt.plot(NList, np.ones(lN)[:,None] @ np.arange(0, 0.5, 0.1)[None,:],'--')
+plt.figure()
+plt.plot(NList, JKestList[:,:,4])
+plt.plot(NList, np.ones(lN)[:,None] @ np.arange(0, 0.5, 0.1)[None,:],'--')
+plt.show()
 
 #j1, j2 = 0, 4
 #jX, jY = 20, 20
