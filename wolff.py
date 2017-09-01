@@ -3,14 +3,10 @@ import matplotlib.pylab as plt
 np.random.seed(5)
 
 
-
-
 def sampleX(J, D, N, burn_in, thin):
     n_sample_steps = burn_in + N * thin
     Dx = D
     Dy = D
-
-
 
     X = np.zeros((N, Dx, Dy))
     x = np.random.randint(2, size=(Dx, Dy))
@@ -73,15 +69,17 @@ def stackX(X, ratio = 1.5, pad = 1):
     Xstack = np.vstack(rows)
     return Xstack
             
-N = 5
-D = 20
 
-burn_in = 100 * D**2
-thin = 10 * D**2
+if __name__ == '__main__':
+    N = 5
+    D = 20
 
-Jstar = np.log(1 + np.sqrt(2)) / 2
-J = Jstar
-X = sampleX(J, D, 6, 100, 100)
-X_stacked = stackX(X)
-plt.imshow(X_stacked)
-plt.show()
+    burn_in = 100 * D**2
+    thin = 10 * D**2
+
+    Jstar = np.log(1 + np.sqrt(2)) / 2
+    J = Jstar
+    X = sampleX(J, D, 6, 100, 100)
+    X_stacked = stackX(X)
+    plt.imshow(X_stacked)
+    plt.show()

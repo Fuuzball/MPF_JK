@@ -4,7 +4,6 @@ from scipy.signal import convolve
 
 # Conventions: spins are symmetric: {-1,1}, J has vanishing diagonals, energy is E = 0.5 x.T @ J @ X
 
-np.set_printoptions( precision = 3 )
 epsilon = 1E-10
 Seed = 15
 if Seed:
@@ -22,93 +21,85 @@ def get_rand_X(D, N = 1):
 def sigmoid( x ):
     return 1 / ( 1 + np.exp( -x ) )
 
-class JKIsingModel(object):
+def stack_X(X, ratio = 1.5, pad = 1):
+    N, Dx, Dy = X.shape
+    W = int(np.ceil(np.sqrt(ratio * N)))
+    H = int(np.ceil(N / W))
 
-    def __init__(self, X, J = (0, 0, 0, 0), K = 0):
-        self.X = X
-        self.J = J
-        self.K = K
+    if H * W > N:
+        X = np.concatenate((X, np.zeros((H * W - N, Dx, Dy))))
 
-        self.n_samples, self.D1, self.D2 = X.shape
+    padX = np.pad(X, ((0,0), (pad,pad), (pad,pad)), 'constant', constant_values = 0.5)
+    rows = []
+    for i in range(H):
+        rows.append(np.hstack((padX[i*W:(i+1)*W])))
+    Xstack = np.vstack(rows)
+    return Xstack
 
-    def get_coupling_matrix(self, J):
-        """
-        For given 1-4th NN coupling strength J, return 5 x 5 matrix to be convolved with spins
-        """
+def get_coupling_matrix(J):
+    """
+    For given 1-4th NN coupling strength J, return 5 x 5 matrix to be convolved with spins
+    """
 
-        a = np.array([[4,1,0,1,4]])
-        r2 = a + a.T
-        W = np.zeros((5,5))
-        W[r2 == 1] = J[0]
-        W[r2 == 2] = J[1]
-        W[r2 == 4] = J[2]
-        W[r2 == 5] = J[3]
-        return W
+    a = np.array([[4,1,0,1,4]])
+    r2 = a + a.T
+    W = np.zeros((5,5))
+    W[r2 == 1] = J[0]
+    W[r2 == 2] = J[1]
+    W[r2 == 4] = J[2]
+    W[r2 == 5] = J[3]
+    return W
 
-    def site_nn_correlation(self, W):
-        """
-        Get spin-spin correlation per site for given coupling matrix W
-        """
+def site_nn_correlation(X, W):
+    """
+    Get spin-spin correlation per site for given coupling matrix W
+    """
 
-        corr_mat = np.zeros_like(self.X)
+   # corr_mat = np.zeros_like(X)
 
-        for i, x in enumerate(self.X):
-            corr_mat[i] = convolve(x, W,  mode='same')
-        
-        return corr_mat * self.X
+    corr_mat = convolve(X, W, mode='same')
 
-    def total_correlation(self):
-        """
-        Get 1-4th NN spin-spin correlation of the entire system
-        """
+    return corr_mat * X
 
-        total_corr = np.zeros((self.n_samples, 4))
-        for n in range(4):
-            j = [0, 0, 0, 0]
-            j[n] = 1
-            W = self.get_coupling_matrix(j)
-            C = self.site_nn_correlation(W)
-            total_corr[:, n] = C.sum(axis=(1,2))
+def total_correlation(X):
+    """
+    Get 1-4th NN spin-spin correlation of the entire system
+    """
 
-        return total_corr / 2
+    #total_corr = [0, 0, 0, 0]
+    total_corr = np.zeros(4)
+    for n in range(4):
+        j = [0, 0, 0, 0]
+        j[n] = 1
+        W = get_coupling_matrix(j)
+        C = site_nn_correlation(X, W)
+        total_corr[n] = C.sum()
 
-    def fourth_order_interaction(self):
-        """
-        Return the energy due to fourth order interaction
-        """
+    return total_corr / 2
 
-        E4 = np.zeros(self.n_samples)
-        M = np.ones((2,2))
-        for n in range(self.n_samples):
-            XM = convolve(self.X[n], M, 'valid')
-            Q = np.ones_like(XM)
-            Q[np.abs(XM) == 2] = -1
-            E4[n] = Q.sum()
+def fourth_order_interaction(X):
+    """
+    Return the energy due to fourth order interaction
+    """
 
-        return E4
+    M = np.ones((2,2))
+    XM = convolve(X, M, 'valid')
+    Q = np.ones_like(XM)
+    Q[np.abs(XM) == 2] = -1
+    #E4[n] = Q.sum()
 
-    def energy(self):
-        W = self.get_coupling_matrix(self.J)
-        C = self.site_nn_correlation(W)
-        # Energy due to second order interactions
-        E = C.sum(axis=(1,2)) / 2 
-        # Energy due to fourth order interactions
-        E += self. K * self.fourth_order_interaction()
+    return Q.sum()
 
-        return E
+def energy(X, J, K):
+    W = get_coupling_matrix(J)
+    C = site_nn_correlation(X, W)
 
-    def propose_flip(self, dx, dy, p):
-        assert dx < self.D1
-        assert dy < self.D2
+    # Energy due to second order interactions
+    E = -C.sum() / 2 
+    # Energy due to fourth order interactions
+    E += -K * fourth_order_interaction(X)
 
-        E0 = self.energy()
-        self.X[:, dx, dy] *= -1
-        dE = self.energy() - E0
-
-        # Reject proposal if fails check
-        fails = sigmoid(-dE) < p
-        self.X[fails, dx, dy] *= -1
-
+    return E
 
 def local_sampling(D, N, J, K, burn_in, thin):
     n_sample_steps = burn_in + N * thin
@@ -123,32 +114,124 @@ def local_sampling(D, N, J, K, burn_in, thin):
     dyRand = np.random.randint(Dy, size = (n_sample_steps))
 
     X = np.zeros((N, Dx, Dy))
-    x = get_rand_X(D)
-    S = JKIsingModel(x, J, K)
-    S_next = JKIsingModel(x, J, K)
+    x = get_rand_X(D)[0]
 
     for i in range(n_sample_steps):
         p = pRand[i]
         dx = dxRand[i]
         dy = dyRand[i]
-        S.propose_flip(dx, dy, p)
+        E0 = energy(x, J, K)
+        x[dx, dy] *= -1
+        Ep = energy(x, J, K)
+        if sigmoid(-(Ep - E0)) < p:
+            x[dx, dy] *= -1
 
         if i >= burn_in and (i - burn_in) % thin == 0:
-            X[(i - burn_in) // thin ] = S.X[0]
+            X[(i - burn_in) // thin ] = x
 
     return X
 
+def get_H_eff(Xs, J, K):
+    N = len(Xs)
+    C1 = np.zeros(N)
+    E = np.zeros(N)
+    for n, X in enumerate(Xs):
+        C1[n] = total_correlation(X)[0]
+        E[n] = energy(X, J, K)
+    a = np.hstack((np.ones(N)[:, None], -C1[:, None]))
+    E0, J1 = np.linalg.lstsq(a, E)[0]
+    return E0, J1
 
-X = get_rand_X(3, 5)
-print(X)
-jk_model = JKIsingModel(X, J=(1,0,0,0), K=1)
+def flip_cluster(X0, d_init, J):
+    visited = []
+    # Initial site
+    to_flip = [d_init]
+    p = 1 - np.exp(-J)
+
+    X = X0.copy()
+    D = X0.shape
+
+    while to_flip:
+        new_to_flip = []
+        for d in to_flip:
+            visited.append(d)
+            nn = get_nn_indices(D, d)
+            for n in nn:
+                if ( X[n] == X[d] ) and ( n not in visited ) and (np.random.rand() < p):
+                    new_to_flip.append(n)
+            X[d] *= -1
+        visited.extend(to_flip)
+        to_flip = set(new_to_flip)
+
+    return X
+
+def get_nn_indices(D, d):
+    nn = []
+    i, j = d
+    if i > 0:
+        nn.append((i - 1, j))
+    if j > 0:
+        nn.append((i, j - 1)) 
+    if i < D[0] - 1:
+        nn.append((i + 1, j))
+    if j < D[1] - 1:
+        nn.append((i, j + 1))
+    return nn
+
+def sample_wolff_effective(E0, J_eff, J, K, D, N, burn_in, thin):
+
+    n_sample_steps = burn_in + N * thin
+    if isinstance(D, int):
+        Dx = Dy = D
+    else:
+        Dx, Dy = D
+
+    pRand = np.random.random(n_sample_steps)
+    dxRand = np.random.randint(Dx, size = (n_sample_steps))
+    dyRand = np.random.randint(Dy, size = (n_sample_steps))
+
+    X = np.zeros((N, Dx, Dy))
+    #x = np.random.randint(2, size=(Dx, Dy))
+    x = get_rand_X(D)[0]
+
+    delta_J = J
+    delta_J[0] - J_eff
+
+    for i in range(n_sample_steps):
+        d = (dxRand[i], dyRand[i])
+
+        xp = flip_cluster(x, d, J_eff) 
+        delta_E = energy(xp, delta_J, K) - energy(x, delta_J, K)
+
+        if sigmoid(-delta_E) > pRand[i]:
+            x = xp
+
+        if i >= burn_in and (i - burn_in) % thin == 0:
+            print((i - burn_in) // thin)
+            X[(i - burn_in) // thin] = x
+    
+    return X
 
 N = 60 #Number of samples
-D = (5, 5) #Dimension
-burn_in = 100 * D[0] * D[1]
+D = (10, 10) #Dimension
+burn_in = 50 * D[0] * D[1]
 thin = 10 * D[0] * D[1]
-J = (1, 0, 0, 0)
-K = 1
+J = (0.275, 0, 0, 0)
+K = 0.2
+K = 0
 
-X_sampled = local_sampling(D, N, J, K, burn_in, thin)
-:w
+X = get_rand_X(6)
+
+
+if True:
+   # X_local_update = local_sampling(D, N, J, K, burn_in, thin)
+   # np.save('./local_X', X_local_update)
+    X_wolff_J_only = sample_wolff_effective(0, 0.275, J, K, D, N, burn_in, thin)
+    np.save('./wolff_X', X_wolff_J_only)
+
+    X_local_update = np.load('./local_X.npy')
+    E0, J_eff = get_H_eff(X_local_update, J, K)
+    print(E0, J_eff)
+    E0, J_eff = get_H_eff(X_wolff_J_only, J, K)
+    print(E0, J_eff)
+
