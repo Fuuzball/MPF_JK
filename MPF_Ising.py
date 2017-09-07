@@ -15,6 +15,7 @@ Seed = 8
 if Seed:
     np.random.seed(Seed)
 
+
 def getW(J):
     a = np.array([[4,1,0,1,4]])
     r2 = a + a.T
@@ -228,23 +229,6 @@ def plotError(JKList, JKest, j1, j2, jX, jY):
 
     plt.show()
 
-#Set parameters
-N = 500 #Number of samples
-Dx, Dy = 10, 10
-D = (Dx, Dy) #Dimension of lattice
-burnIn = 100 * D[0] * D[1]
-thin = 10 * D[0] * D[1]
-
-N = 60 #Number of samples
-D = (10, 10) #Dimension
-burnIn = 100 * D[0] * D[1]
-thin = 10 * D[0] * D[1]
-JK = (0, 0, 0, 0, 0.2)
-
-X = sampleX(JK, D, N, burnIn, thin)
-plt.imshow(stackX(X))
-plt.show()
-
 def sampleX(JK, D, N, burnIn, thin):
     nSampleSteps = burnIn + (N) * thin
     Dx, Dy = D
@@ -275,39 +259,59 @@ def sampleX(JK, D, N, burnIn, thin):
             X[(i - burnIn) // thin ] = x
     return X
 
-if False:
+if __name__ == '__main__':
 
-    dirStr = './data/diag_500/'
-    sampleStr = dirStr + 'sample.json'
-    JKestStr = dirStr + 'JKest.npy' 
+    #Set parameters
+    N = 500 #Number of samples
+    Dx, Dy = 10, 10
+    D = (Dx, Dy) #Dimension of lattice
+    burnIn = 100 * D[0] * D[1]
+    thin = 10 * D[0] * D[1]
 
-    JKList = [(j, 0, 0, 0, j) for j in np.arange(0, 0.5, 0.1)]
+    N = 60 #Number of samples
+    D = (10, 10) #Dimension
+    burnIn = 100 * D[0] * D[1]
+    thin = 10 * D[0] * D[1]
+    JK = (0, 0, 0, 0, 0.2)
 
-    #data = JKSweep(N, D, burnIn, thin, JKList, dirStr)
-    Xs, JKList = loadSample(dirStr) #Load X from existing sample 
-
-    #JKest = JKestSweep(Xs, JKestStr)
-    NList = [10, 20, 30, 50, 80, 100, 200, 300, 500]
-    lN = len(NList)
-    JKestList = np.zeros((lN, 5, 5))
-    for i in range(lN):
-        print(i)
-        break
-        JKestList[i] = JKestSweep(Xs[:, :NList[i], :, :])
-
-    #np.save(dirStr+'JKestList.npy', JKestList)
-    JKestList = np.load(dirStr+'JKestList.npy')
-    #JKest = np.load(JKestStr)
-
-    plt.plot(NList, JKestList[:,:,0])
-    plt.plot(NList, np.ones(lN)[:,None] @ np.arange(0, 0.5, 0.1)[None,:],'--')
-    plt.figure()
-    plt.plot(NList, JKestList[:,:,4])
-    plt.plot(NList, np.ones(lN)[:,None] @ np.arange(0, 0.5, 0.1)[None,:],'--')
+    X = sampleX(JK, D, N, burnIn, thin)
+    plt.imshow(stackX(X))
     plt.show()
 
-    #j1, j2 = 0, 4
-    #jX, jY = 20, 20
-    #plotError(JKList, JKest, j1, j2, jX, jY)
 
-    #plotPhase(Xs, 0)
+    if False:
+
+        dirStr = './data/diag_500/'
+        sampleStr = dirStr + 'sample.json'
+        JKestStr = dirStr + 'JKest.npy' 
+
+        JKList = [(j, 0, 0, 0, j) for j in np.arange(0, 0.5, 0.1)]
+
+        #data = JKSweep(N, D, burnIn, thin, JKList, dirStr)
+        Xs, JKList = loadSample(dirStr) #Load X from existing sample 
+
+        #JKest = JKestSweep(Xs, JKestStr)
+        NList = [10, 20, 30, 50, 80, 100, 200, 300, 500]
+        lN = len(NList)
+        JKestList = np.zeros((lN, 5, 5))
+        for i in range(lN):
+            print(i)
+            break
+            JKestList[i] = JKestSweep(Xs[:, :NList[i], :, :])
+
+        #np.save(dirStr+'JKestList.npy', JKestList)
+        JKestList = np.load(dirStr+'JKestList.npy')
+        #JKest = np.load(JKestStr)
+
+        plt.plot(NList, JKestList[:,:,0])
+        plt.plot(NList, np.ones(lN)[:,None] @ np.arange(0, 0.5, 0.1)[None,:],'--')
+        plt.figure()
+        plt.plot(NList, JKestList[:,:,4])
+        plt.plot(NList, np.ones(lN)[:,None] @ np.arange(0, 0.5, 0.1)[None,:],'--')
+        plt.show()
+
+        #j1, j2 = 0, 4
+        #jX, jY = 20, 20
+        #plotError(JKList, JKest, j1, j2, jX, jY)
+
+        #plotPhase(Xs, 0)

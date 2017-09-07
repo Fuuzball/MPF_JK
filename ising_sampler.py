@@ -1,5 +1,8 @@
 import numpy as np
 import matplotlib.pylab as plt
+import MPF_Ising as MPF
+from mpf_ising_jk import MPF_Estimator
+import time
 from scipy.signal import convolve
 
 # Conventions: spins are symmetric: {-1,1}, J has vanishing diagonals, energy is E = 0.5 x.T @ J @ X
@@ -101,7 +104,7 @@ def energy(X, J, K):
 
     return E
 
-def local_sampling(D, N, J, K, burn_in, thin):
+def sample_local(D, N, J, K, burn_in, thin):
     n_sample_steps = burn_in + N * thin
 
     if isinstance(D, int):
@@ -146,7 +149,7 @@ def flip_cluster(X0, d_init, J):
     visited = []
     # Initial site
     to_flip = [d_init]
-    p = 1 - np.exp(-J)
+    p = 1 - np.exp(-2 * J)
 
     X = X0.copy()
     D = X0.shape
@@ -194,8 +197,8 @@ def sample_wolff_effective(E0, J_eff, J, K, D, N, burn_in, thin):
     #x = np.random.randint(2, size=(Dx, Dy))
     x = get_rand_X(D)[0]
 
-    delta_J = J
-    delta_J[0] - J_eff
+    delta_J = list(J)
+    delta_J[0] -= J_eff
 
     for i in range(n_sample_steps):
         d = (dxRand[i], dyRand[i])
@@ -207,31 +210,61 @@ def sample_wolff_effective(E0, J_eff, J, K, D, N, burn_in, thin):
             x = xp
 
         if i >= burn_in and (i - burn_in) % thin == 0:
-            print((i - burn_in) // thin)
             X[(i - burn_in) // thin] = x
     
     return X
 
-N = 60 #Number of samples
-D = (10, 10) #Dimension
-burn_in = 50 * D[0] * D[1]
-thin = 10 * D[0] * D[1]
-J = (0.275, 0, 0, 0)
-K = 0.2
-K = 0
+if __name__ == '__main__':
 
-X = get_rand_X(6)
+    N = 60 #Number of samples
+    D = (10, 10) #Dimension
+    burn_in = int(50 * ( D[0] * D[1] ))
+    thin = int(10 * ( D[0] * D[1] ))
+    J = (0.275, 0, 0, 0)
+    K = .2
+
+    if False:
+        X_local = sample_local(D, N, J, K, burn_in, thin)
+        np.save('./X_local', X_local)
+    else:
+        X_local = np.load('./X_local.npy')
+
+    E0, J_eff = get_H_eff(X_local, J, K)
+
+    if False:
+        X = sample_wolff_effective(E0, J_eff, J, K, D, N, burn_in, thin)
+        np.save('./X', X)
+    else:
+        X = np.load('./X.npy')
+
+    print('effective parameters : E0 = {}, J_eff = {}'.format(E0, J_eff))
+    print('true parameters : J = {}, K = {} '.format(J, K)) 
+    print('local parameter estimates : {}'.format(MPF.learnJ(X_local)))
+    estimator_X_local = MPF_Estimator(X_local)
+    estimator_X = MPF_Estimator(X)
+
+    t0 = time.time()
+    print('local parameter estimates  : {}'.format(MPF.learnJ(X_local)))
+    print('time: {}'.format(time.time() - t0))
+    t0 = time.time()
+    print('local parameter estimates (class MPF) : {}'.format(estimator_X_local.learn_jk()))
+    print('time: {}'.format(time.time() - t0))
+    t0 = time.time()
+    print('woff_eff parameter estimates : {}'.format(MPF.learnJ(X)))
+    print('time: {}'.format(time.time() - t0))
+    t0 = time.time()
+    print('woff_eff parameter estimates (class MPF) : {}'.format(estimator_X.learn_jk()))
+    print('time: {}'.format(time.time() - t0))
+
+    plt.figure()
+    plt.imshow(stack_X(X_local))
+    plt.figure()
+    plt.imshow(stack_X(X))
 
 
-if True:
-   # X_local_update = local_sampling(D, N, J, K, burn_in, thin)
-   # np.save('./local_X', X_local_update)
-    X_wolff_J_only = sample_wolff_effective(0, 0.275, J, K, D, N, burn_in, thin)
-    np.save('./wolff_X', X_wolff_J_only)
+    plt.show()
 
-    X_local_update = np.load('./local_X.npy')
-    E0, J_eff = get_H_eff(X_local_update, J, K)
-    print(E0, J_eff)
-    E0, J_eff = get_H_eff(X_wolff_J_only, J, K)
-    print(E0, J_eff)
+    
+
+
 
