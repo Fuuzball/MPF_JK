@@ -10,17 +10,20 @@ img_w = 4284
 n_files = 50
 
 def write_images_npz(nfiles=n_files):
-    image_fnames = image_fnames[:nfiles]
-    img_n = len(image_fnames)
-    image_arr = np.zeros((img_n, img_h, img_w), dtype=np.uint8)
-    for i, f in enumerate(image_fnames):
+    image_fnames_s = image_fnames[:nfiles]
+    img_n = len(image_fnames_s)
+    image_arr = np.zeros((img_n, img_h, img_w), dtype=np.int8)
+    for i, f in enumerate(image_fnames_s):
         print(i)
         fname = os.path.join('./geisler', f)
         M = np.array(loadmat(fname)['B'])
-        image_arr[i] = M
+        image_arr[i] = 2 * M - 1
 
     print(image_arr)
     np.savez_compressed('./geisler/images', image_arr)
+
+#write_images_npz()
+print('finished writing images')
 
 patch_size = 18
 
@@ -32,17 +35,10 @@ patches = []
 
 image_arr = np.load('./geisler/images.npz')['arr_0']
 
-image = image_arr[0]
-img_patches = np.array( 
-            [a for m in np.split(image, n_h_split) for a in np.split(m, n_w_split, axis=1)]
-        )
-print(img_patches.mean())
-
-if False:
-    for image in image_arr:
-        print('-'*10)
+if True:
+    for i, image in enumerate(image_arr):
+        print(i)
         img_patches = [a for m in np.split(image, n_h_split) for a in np.split(m, n_w_split, axis=1)]
-        print(img_patches[2])
         patches.extend(
                 [a for m in np.split(image, n_h_split) for a in np.split(m, n_w_split, axis=1)]
                 )

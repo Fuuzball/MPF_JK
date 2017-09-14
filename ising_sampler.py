@@ -130,6 +130,7 @@ def sample_local(D, N, J, K, burn_in, thin):
             x[dx, dy] *= -1
 
         if i >= burn_in and (i - burn_in) % thin == 0:
+            print((i - burn_in) // thin )
             X[(i - burn_in) // thin ] = x
 
     return X
@@ -210,54 +211,59 @@ def sample_wolff_effective(E0, J_eff, J, K, D, N, burn_in, thin):
             x = xp
 
         if i >= burn_in and (i - burn_in) % thin == 0:
+            print((i - burn_in) // thin)
             X[(i - burn_in) // thin] = x
     
     return X
 
+def SLMC_sample(J, K, D, N, burn_in, thin):
+    print('Sampling with local updates...')
+    X_local = sample_local(D, N, J, K, burn_in, thin)
+    E0, J_eff = get_H_eff(X_local, J, K)
+    print('Effective parameters : E0 = {}, J_eff = {}'.format(E0, J_eff))
+    print('Wolff sampling...')
+    X = sample_wolff_effective(E0, J_eff, J, K, D, N, burn_in, thin)
+    return X
+
 if __name__ == '__main__':
 
-    N = 60 #Number of samples
-    D = (10, 10) #Dimension
-    burn_in = int(50 * ( D[0] * D[1] ))
-    thin = int(10 * ( D[0] * D[1] ))
-    J = (0.275, 0, 0, 0)
-    K = .2
+    N = 20 #Number of samples
+    D = (18, 18) #Dimension
+    burn_in = int(10 * ( D[0] * D[1] ))
+    thin = int(1 * ( D[0] * D[1] ))
+    J = [-j for j in [-0.6905666,  -0.15444032,  0.06169692,  0.05076923]]
+    K = 0.06480178
 
     if False:
         X_local = sample_local(D, N, J, K, burn_in, thin)
         np.save('./X_local', X_local)
+        print('sample created with local updates')
     else:
         X_local = np.load('./X_local.npy')
+    plt.figure()
+    plt.imshow(stack_X(X_local))
+    plt.show()
+
+    estimator_X_local = MPF_Estimator(X_local)
+    print('local parameter estimates : {}'.format(estimator_X_local.learn_jk()))
 
     E0, J_eff = get_H_eff(X_local, J, K)
+    print('effective parameters : E0 = {}, J_eff = {}'.format(E0, J_eff))
 
-    if False:
+    N = 30 #Number of samples
+    burn_in = int(1 * ( D[0] * D[1] ))
+    thin = int(10 * ( D[0] * D[1] )) 
+
+    if True:
         X = sample_wolff_effective(E0, J_eff, J, K, D, N, burn_in, thin)
         np.save('./X', X)
     else:
         X = np.load('./X.npy')
 
-    print('effective parameters : E0 = {}, J_eff = {}'.format(E0, J_eff))
     print('true parameters : J = {}, K = {} '.format(J, K)) 
-    print('local parameter estimates : {}'.format(MPF.learnJ(X_local)))
-    estimator_X_local = MPF_Estimator(X_local)
     estimator_X = MPF_Estimator(X)
+    print('woff_eff parameter estimates : {}'.format(estimator_X.learn_jk()))
 
-    t0 = time.time()
-    print('local parameter estimates  : {}'.format(MPF.learnJ(X_local)))
-    print('time: {}'.format(time.time() - t0))
-    t0 = time.time()
-    print('local parameter estimates (class MPF) : {}'.format(estimator_X_local.learn_jk()))
-    print('time: {}'.format(time.time() - t0))
-    t0 = time.time()
-    print('woff_eff parameter estimates : {}'.format(MPF.learnJ(X)))
-    print('time: {}'.format(time.time() - t0))
-    t0 = time.time()
-    print('woff_eff parameter estimates (class MPF) : {}'.format(estimator_X.learn_jk()))
-    print('time: {}'.format(time.time() - t0))
-
-    plt.figure()
-    plt.imshow(stack_X(X_local))
     plt.figure()
     plt.imshow(stack_X(X))
 
