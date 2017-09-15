@@ -3,7 +3,7 @@ from scipy.signal import convolve
 from scipy import optimize
 
 class MPF_Estimator(object):
-# Conventions: spins are symmetric: {-1,1}, J has vanishing diagonals, energy is E = 0.5 x.T @ J @ X
+# Conventions: spins are symmetric: {-1,1}, energy is E = -0.5 x.T @ J @ X
 
     def __init__(self, X, JK0=None):
         self.X = X
@@ -22,7 +22,7 @@ class MPF_Estimator(object):
             XM = convolve(x, M, 'valid')
             Q = np.ones_like(XM)
             Q[np.abs(XM) == 2] = -1
-            dE[n] = -2 * convolve(Q, M, 'full')
+            dE[n] = 2 * convolve(Q, M, 'full')
 
         return dE
 
@@ -54,7 +54,7 @@ class MPF_Estimator(object):
 
         # Adding contributions due to second order
         for n in range(4):
-            dE += -2 * J[n] * self.corr_second[n]
+            dE += J[n] * self.corr_second[n]
 
         # Adding contributions due to fourth order
         dE += K * self.corr_fourth
@@ -65,7 +65,7 @@ class MPF_Estimator(object):
         dK = []
         for C in self.corr_second:
             #dKdn = X * getH(X, j) * Kdn
-            dKdn = C * Kdn
+            dKdn = -0.5 * C * Kdn
             dK.append(dKdn.sum())
 
         dKdn = -0.5 * self.corr_fourth * Kdn
@@ -83,3 +83,8 @@ class MPF_Estimator(object):
         return np.array(min_out[0])
 
 
+if __name__ == '__main__':
+    D = 100
+    X = np.ones((10, D, D))
+    mpf = MPF_Estimator(X)
+    print(mpf.learn_jk())
