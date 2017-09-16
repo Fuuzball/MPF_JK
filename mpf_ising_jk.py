@@ -44,7 +44,24 @@ class MPF_Estimator(object):
         for n, x in enumerate(self.X):
             H[n] = convolve(x, W, 'same')
 
-        return self.X * H
+        return H / 2
+
+    def total_second_corr(self):
+        C = []
+        for n in range(4):
+            C.append( self.corr_second[n].sum(axis=(1,2)) )
+
+        return C
+
+    def energy(self, J, K):
+        E = -self._H(J).sum(axis=(1,2))
+        M = np.ones((2,2))
+        for n, x in enumerate(self.X):
+            XM = convolve(x, M, 'valid')
+            Q = np.ones_like(XM)
+            Q[np.abs(XM) == 2] = -1
+            E[n] -= K * Q.sum()
+        return E
 
     def K_dK(self, JK):
         J = JK[:4]
@@ -54,7 +71,7 @@ class MPF_Estimator(object):
 
         # Adding contributions due to second order
         for n in range(4):
-            dE += J[n] * self.corr_second[n]
+            dE += 2 * J[n] * self.X * self.corr_second[n]
 
         # Adding contributions due to fourth order
         dE += K * self.corr_fourth
@@ -84,7 +101,7 @@ class MPF_Estimator(object):
 
 
 if __name__ == '__main__':
-    D = 100
+    D = 3
     X = np.ones((10, D, D))
     mpf = MPF_Estimator(X)
-    print(mpf.learn_jk())
+    print(mpf.energy([1,0,0,0], 1))

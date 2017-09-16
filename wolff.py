@@ -5,39 +5,6 @@ import matplotlib.pylab as plt
 from mpf_ising_jk import MPF_Estimator
 #np.random.seed(42)
 
-
-def sample_X(J, D, N, burn_in, thin):
-    n_sample_steps = burn_in + N * thin
-    Dx = D
-    Dy = D
-
-    X = np.zeros((N, Dx, Dy))
-    x = np.random.randint(2, size=(Dx, Dy)) * 2 - 1
-
-    for i in range(n_sample_steps):
-        d =  np.random.randint(D, size=(2))
-        d = tuple(d)
-        x = flip_cluster(x, d, J)
-
-        if i >= burn_in and (i - burn_in) % thin == 0:
-            X[(i - burn_in) // thin] = x
-    
-    return X
-
-
-def get_nn_indices(D, d):
-    nn = []
-    i, j = d
-    if i > 0:
-        nn.append((i - 1, j))
-    if j > 0:
-        nn.append((i, j - 1)) 
-    if i < D - 1:
-        nn.append((i + 1, j))
-    if j < D - 1:
-        nn.append((i, j + 1))
-    return nn
-
 def stack_X(X, ratio = 1.5, pad = 1):
     N, Dx, Dy = X.shape
     W = int(np.ceil(np.sqrt(ratio * N)))
@@ -52,51 +19,68 @@ def stack_X(X, ratio = 1.5, pad = 1):
         rows.append(np.hstack((padX[i*W:(i+1)*W])))
     Xstack = np.vstack(rows)
     return Xstack
-            
-def flip_cluster(X, d_init, J):
-    visited = set([])
-    # Initial site
-    to_flip = {d_init}
-    p = 1 - np.exp(-J)
-
-    while to_flip:
-        new_to_flip = set([])
-        for d in to_flip:
-            visited.add(d)
-            nn = get_nn_indices(D, d)
-            for n in nn:
-                if ( X[n] == X[d] ) and ( n not in visited ) and (random.random() < p):
-                    new_to_flip.add(n)
-            X[d] *= -1
-        visited.update(to_flip)
-        to_flip = set(new_to_flip)
-
-    return X
 
 class WolffSampler(object):
     
-    def __init__(self, J, D, N, burn_in, thin):
-        self.J = J
+    def __init__(self, D, J):
         self.D = D
-        self.N = N
-        self.burn_in = burn_in
-        self.thin = thin
-
-        self.n_sample_steps = burn_in + N * thin 
+        self.J = J
         self.make_nn_dict()
 
-    def sample_X(self, new_J=None): 
+    def get_recommended_burnin_thin(self, burn_max=1000, thin_max=1000, plot=False):
+        X = self.sample_X(burn_max, 0, 1)
+        dist0 = ((X[0] != X).mean(axis=(1,2)))
+        burn_in_rec = np.nonzero(dist0 > 0.5)[0][1]
 
+        valid_start = np.arange(burn_in_rec, thin_max - burn_in_rec)
+        dist = []
+        for t in valid_start:
+            dist.append(
+                ((X[t] != X).mean(axis=(1,2)))[t: t + burn_in_rec] 
+                    ) 
+        dist = np.array(dist)
+        dist_mean = dist.mean(axis=0)
+        thin_rec = np.nonzero(dist_mean > 0.5)[0][1]
+        
+        if plot:
+            plt.figure()
+            plt.subplot(211)
+            plt.plot(np.arange(burn_max), dist0)
+            plt.subplot(212)
+            plt.plot(dist_mean)
+
+        return burn_in_rec, thin_rec
+
+    def sample_X(self, N, burn_in=None, thin=None, new_J=None, display_time=False): 
+        D = self.D
+        t0 = time.process_time()
         if new_J:
             self.J = new_J
-        self.x = np.random.randint(2, size=(self.D, self.D)) * 2 - 1
+
+        if (burn_in is None) or (thin is None):
+            print('Using recommended burn in / thin...')
+            burn_in_rec, thin_rec = self.get_recommended_burnin_thin()
+            if burn_in is None:
+                burn_in = burn_in_rec
+                print('Burn in : ', burn_in)
+            if thin is None:
+                thin = thin_rec
+                print('Thin : ', thin)
+
+
+        n_sample_steps = burn_in + N * thin
         X = np.zeros((N, D, D)) 
-        for i in range(self.n_sample_steps):
-            self.flip_random_cluster()
+        self.x = np.random.randint(2, size=(D, D)) * 2 - 1
 
-            if i >= self.burn_in and (i - self.burn_in) % self.thin == 0:
-                X[(i - self.burn_in) // self.thin] = self.x
+        for i in range(n_sample_steps):
+            self.flip_random_cluster() 
+            if i >= burn_in and (i - burn_in) % thin == 0:
+                X[(i - burn_in) // thin] = self.x
 
+        self.X = X
+
+        if display_time:
+            print('Sampling took {:.4f}s'.format(time.process_time() - t0))
         return X
 
     def flip_random_cluster(self):
@@ -130,25 +114,27 @@ class WolffSampler(object):
                     nn.append((i - 1, j))
                 if j > 0:
                     nn.append((i, j - 1)) 
-                if i < D - 1:
+                if i < self.D - 1:
                     nn.append((i + 1, j))
-                if j < D - 1:
+                if j < self.D - 1:
                     nn.append((i, j + 1))
                 self.nn_dict[(i, j)] = nn
 
+    def plot_sample(self):
+        plt.imshow(stack_X(self.X))
+        plt.show()
+
 if __name__ == '__main__':
-    N = 20
-    D = 20
-    burn_in = 0
-    thin = 1
-    J = 1
+    N = 100
+    D = 50
 
-    wolff = WolffSampler(J, D, N, burn_in, thin)
-    t0 = time.process_time()
-    X = wolff.sample_X()
-    t1 = time.process_time()
-    plt.imshow(stack_X(X))
-    plt.show()
+    J = np.log(1 + np.sqrt(2))
+    print('J : ', J)
 
+    #wolff = WolffSampler(J, D, N, burn_in, thin)
+    wolff = WolffSampler(D, J)
+    X = wolff.sample_X(N, display_time=True)
+    mpf = MPF_Estimator(X)
+    print(mpf.learn_jk())
 
-
+    wolff.plot_sample()
