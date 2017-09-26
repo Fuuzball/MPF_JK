@@ -5,10 +5,11 @@ from scipy import optimize
 class MPF_Estimator(object):
 # Conventions: spins are symmetric: {-1,1}, energy is E = -0.5 x.T @ J @ X
 
-    def __init__(self, X, JK0=None):
+    def __init__(self, X, JK0=None, fit_params=[1, 1, 1, 1, 1]):
         self.X = X
         self.JK_init = JK0
         self.corr_second = [None, None, None, None]
+        self.fit_params = fit_params
         for n in range(4):
             J = [0, 0, 0, 0]
             J[n] = 1
@@ -71,10 +72,10 @@ class MPF_Estimator(object):
 
         # Adding contributions due to second order
         for n in range(4):
-            dE += 2 * J[n] * self.X * self.corr_second[n]
+            dE += 2 * J[n] * self.X * self.corr_second[n] * self.fit_params[n]
 
         # Adding contributions due to fourth order
-        dE += K * self.corr_fourth
+        dE += K * self.corr_fourth * self.fit_params[4]
 
         Kdn = np.exp(-0.5 * dE)
         K = Kdn.sum()
@@ -82,7 +83,8 @@ class MPF_Estimator(object):
         dK = []
         for C in self.corr_second:
             #dKdn = X * getH(X, j) * Kdn
-            dKdn = -0.5 * C * Kdn
+            #dKdn = -0.5 * self.X *  C * Kdn
+            dKdn = - self.X *  C * Kdn
             dK.append(dKdn.sum())
 
         dKdn = -0.5 * self.corr_fourth * Kdn
@@ -96,8 +98,20 @@ class MPF_Estimator(object):
             JK = 2 * np.random.random(5) - 1
 
         min_out = optimize.fmin_l_bfgs_b(self.K_dK, JK)
+        estimate = min_out[0]
 
-        return np.array(min_out[0])
+        param_names = ['J1', 'J2', 'J3', 'J4', 'K']
+        output=[]
+        params=[]
+
+        for n in range(5):
+            if self.fit_params[n]:
+                params.append(param_names[n])
+                output.append(estimate[n])
+
+        print('Parameters fitted :', params)
+        return np.array(output)
+
 
 
 if __name__ == '__main__':

@@ -5,6 +5,7 @@ from scipy.signal import convolve
 from scipy import optimize
 import time
 import matplotlib.pylab as plt
+from mpf_ising_jk import MPF_Estimator
 
 class GibbsSampler(object):
 # Conventions: spins are symmetric: {-1,1}, energy is E = -0.5 x.T @ J @ X
@@ -142,18 +143,22 @@ def stack_X(X, ratio = 1.5, pad = 1):
 
 
 if __name__ == '__main__':
-    N = 6
+    N = 15
     D = 18
     J = [0.6905666,  0.15444032,  -0.06169692,  -0.05076923]
     K = -0.06480178
-    J = [0.2905666,  0.15444032,  -0.06169692,  -0.05076923]
+    #J = [0.2905666,  0.15444032,  -0.06169692,  -0.05076923]
+    J = [.5, .2, 0, 0]
+    K = 0
 
 
     burn_in = 100
     thin = 100
 
     gibbs = GibbsSampler(D, J, K)
-    gibbs.sample_X(N, 300, 5000)
-    gibbs.plot_sample()
-    plt.show()
+    X = gibbs.sample_X(N, 300, 5000)
+    mpf = MPF_Estimator(X)
+    print(mpf.learn_jk())
+    #gibbs.plot_sample()
+    #plt.show()
 
