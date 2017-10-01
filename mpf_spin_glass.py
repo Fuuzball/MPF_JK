@@ -63,7 +63,7 @@ class MPF_Glass_JK(MPF_Glass):
 
         if shape == None:
             W = int(np.sqrt(self.D))
-            H = int(D / W)
+            H = int(self.D / W)
             self.shape=(W, H)
         self.X_2d = X.reshape((self.N, *self.shape))
 
@@ -120,7 +120,7 @@ class MPF_Glass_JK(MPF_Glass):
         min_out = optimize.fmin_l_bfgs_b(self.K_dK, Jbk)
         estimate = min_out[0]
 
-        return self.reshape_jbk(estimate)
+        return self.reshape_JbK(estimate)
 
 if __name__ == '__main__':
     d = 4
@@ -156,6 +156,6 @@ if __name__ == '__main__':
 
 
     dkdj, dkdb, dkdk = mpf.reshape_JbK(mpf.K_dK(JbK)[1])
-    print(dkdk)
+    print(mpf.learn_jbk()[2])
 
 

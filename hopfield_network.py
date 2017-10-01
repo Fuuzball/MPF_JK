@@ -2,8 +2,9 @@ import numpy as np
 from sklearn.datasets import fetch_mldata
 mnist = fetch_mldata('MNIST original') 
 import matplotlib.pylab as plt
-from mpf_spin_glass import MPF_Glass
+from mpf_spin_glass import MPF_Glass, MPF_Glass_JK
 import time
+from scipy.signal import convolve
 
 
 
@@ -96,6 +97,86 @@ class HopfieldNet(object):
             X_conv[:, i] = 2 * (X_conv @ self.J[:, i] > 0) - 1
         return np.all(X_conv == self.X_w_bias, axis=1)
 
+class HopfieldNetJK(HopfieldNet):
+    
+    def __init__(self, X_train, shape=None):
+        super().__init__(X_train, shape)
+
+        if shape == None:
+            W = int(np.sqrt(self.D))
+            H = int(self.D / W)
+            self.shape=(W, H)
+            
+
+        self.X_2d = X_train.reshape((self.K, *self.shape))
+
+    def learn_JbK(self):
+        mpf = MPF_Glass_JK(self.X_train)
+        self.J, self.b, self.k = mpf.learn_jbk()
+        k = self.k.reshape((self.shape[0] - 1, self.shape[1] - 1))
+        
+    def dE(self, X):
+        J, b, K = self.J, self.b, self.k
+        X_2d = X.reshape(self.shape)
+
+        dE_J = 2 * X * (J @ X)
+        dE_b = - 2 * X * b
+        dE_K = np.zeros_like(X_2d, dtype=float)
+
+        M = np.ones((2,2))
+        XM = convolve(X_2d, M, 'valid')
+        Q = np.ones_like(XM)
+        Q[np.abs(XM) == 2] = -1
+        dE_K = -2 * convolve(Q * K, M, 'full').reshape(-1)
+
+        return dE_J + dE_b + dE_K
+
+    def run_network(self, X0=None, history=True, max_iter=10, output=True):
+        if X0 is None:
+            X0 = np.random.randint(2, size=D) * 2 - 1
+
+        X = X0.copy()
+
+        if history:
+            self.X_history = [X.copy()]
+        converged = False
+
+        for n in range(max_iter):
+            print(n)
+            X_prev = X.copy()
+            for i in np.random.permutation(self.D):
+                #X[i] = 2 * ( X @ self.J[:, i] - self.b[i] > 0 ) - 1
+                #X[i] = 2 * ( X @ self.J[:, i] > 0 ) - 1
+                if self.dE(X)[i] < 0:
+                    X[i] *= -1
+                if history:
+                    self.X_history.append(X.copy())
+            if np.array_equal(X_prev, X):
+                converged = True
+                if output:
+                    print('Converged after {} iterations'.format(n + 1))
+                break
+
+        if not converged:
+            if output:
+                print('Did not converge after {} iteration{}'.format(max_iter, 's' if max_iter > 1 else ''))
+
+        if history:
+            self.X_history = np.array(self.X_history)
+
+        return X[:D]
+
+    def is_local_min(self):
+        #X_conv = self.X_train.copy()
+        X = self.X_train.copy()
+        local_min = np.zeros(self.K, dtype=bool)
+        for n in range(self.K):
+            local_min[n] = np.all(self.dE(self.X_train[n]) > 0)
+            
+        print(local_min)
+
+        return local_min
+
 
 if __name__ == '__main__':
     np.random.seed(0)
@@ -103,16 +184,19 @@ if __name__ == '__main__':
     mnist_bin = np.array(mnist.data > 128, dtype=np.int8)
     mnist_bin = mnist_bin * 2 -1
 
-    N = 200
+    N = 1000
 
     N_mnist, D = mnist_bin.shape 
     idx = np.random.choice(N_mnist, N, replace=False)
     mnist_train = mnist_bin[idx]
 
-    hopfield = HopfieldNet(mnist_train)
-    X0 = hopfield.corrupt_memory(frac=0.2)[2]
+    #hopfield = HopfieldNet(mnist_train)
+    hopfield = HopfieldNetJK(mnist_train)
+    X0 = hopfield.corrupt_memory(frac=0.0)[2]
 
-    hopfield.learn_Jb(method='mpf')
+    #hopfield.learn_Jb(method='mpf')
+    #hopfield.run_network(X0, max_iter=10)
+    hopfield.learn_JbK()
     hopfield.run_network(X0, max_iter=10)
 
     if True:
