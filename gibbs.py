@@ -7,6 +7,8 @@ import time
 import matplotlib.pylab as plt
 from mpf_ising_jk import MPF_Estimator
 
+np.random.seed(0)
+
 class GibbsSampler(object):
 # Conventions: spins are symmetric: {-1,1}, energy is E = -0.5 x.T @ J @ X
 
@@ -96,9 +98,14 @@ class GibbsSampler(object):
 
         return dE
 
-    def plot_sample(self):
-        plt.imshow(stack_X(self.X))
-        plt.show()
+    def plot_sample(self, fname='./data/sample.png', ratio = 1.5, W = None, pad = 1):
+
+        X_stacked = stack_X(self.X, ratio, W, pad)
+        fig = plt.imshow(stack_X(self.X, ratio, W, pad), cmap='Greys_r')
+        plt.axis('off')
+        fig.axes.get_xaxis().set_visible(False)
+        fig.axes.get_yaxis().set_visible(False)
+        plt.imsave(fname, X_stacked, format='png', cmap='Greys')
 
     def get_recommended_burnin_thin(self, max_iter=1000, plot=False, window_mult=1, thres=0.5):
         X = self.sample_X(max_iter, 0, 1)
@@ -126,10 +133,14 @@ class GibbsSampler(object):
 
         return burn_in_rec, thin_rec
 
-def stack_X(X, ratio = 1.5, pad = 1):
+def stack_X(X, ratio = 1.5, W = None, pad = 1):
     N, Dx, Dy = X.shape
-    W = int(np.ceil(np.sqrt(ratio * N)))
-    H = int(np.ceil(N / W))
+
+    if W:
+        H = int(np.ceil(N / W))
+    else:
+        W = int(np.ceil(np.sqrt(ratio * N)))
+        H = int(np.ceil(N / W))
 
     if H * W > N:
         X = np.concatenate((X, np.zeros((H * W - N, Dx, Dy))))
@@ -143,22 +154,20 @@ def stack_X(X, ratio = 1.5, pad = 1):
 
 
 if __name__ == '__main__':
-    N = 15
+    N = 4
     D = 18
     J = [0.6905666,  0.15444032,  -0.06169692,  -0.05076923]
-    K = -0.06480178
-    #J = [0.2905666,  0.15444032,  -0.06169692,  -0.05076923]
-    J = [.5, .2, 0, 0]
+    J = [-0.5, 0, 0, 0]
     K = 0
+    #K = -0.06480178
+    #J = [0.2905666,  0.15444032,  -0.06169692,  -0.05076923]
 
 
-    burn_in = 100
-    thin = 100
+    burn_in = 0
+    thin = 600
 
     gibbs = GibbsSampler(D, J, K)
-    X = gibbs.sample_X(N, 300, 5000)
-    mpf = MPF_Estimator(X)
-    print(mpf.learn_jk())
-    #gibbs.plot_sample()
+    X = gibbs.sample_X(N, burn_in, thin)
+    gibbs.plot_sample('./data/sample_m05.png', W=1)
     #plt.show()
 

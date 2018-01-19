@@ -75,7 +75,7 @@ class HopfieldNet(object):
         if history:
             self.X_history = np.array(self.X_history)
 
-        return X[:self.D]
+        return X[:D]
 
     def corrupt_memory(self, frac=0.3):
         X = self.X_train.copy()
@@ -142,6 +142,7 @@ class HopfieldNetJK(HopfieldNet):
         converged = False
 
         for n in range(max_iter):
+            print(n)
             X_prev = X.copy()
             for i in np.random.permutation(self.D):
                 #X[i] = 2 * ( X @ self.J[:, i] - self.b[i] > 0 ) - 1
@@ -163,7 +164,7 @@ class HopfieldNetJK(HopfieldNet):
         if history:
             self.X_history = np.array(self.X_history)
 
-        return X[:self.D]
+        return X[:D]
 
     def is_local_min(self):
         #X_conv = self.X_train.copy()
@@ -180,9 +181,8 @@ class HopfieldNet4(HopfieldNet):
     def __init__(self, X_train, shape=None):
         super().__init__(X_train, shape)
         
-    def E(self, X):
-        xix = np.array(self.X_train @ X, dtype=float)
-        return -((xix**4).sum())
+    def dE(self, X):
+        return ((self.X_train @ X)**4).sum()
 
     def run_network(self, X0=None, history=True, max_iter=10, output=True):
         if X0 is None:
@@ -195,14 +195,13 @@ class HopfieldNet4(HopfieldNet):
         converged = False
 
         for n in range(max_iter):
+            print(n)
             X_prev = X.copy()
             for i in np.random.permutation(self.D):
-                X_flip = X.copy()
-                X_flip[i] *= -1
-
-                if self.E(X_flip) < self.E(X):
-                    X = X_flip
-
+                #X[i] = 2 * ( X @ self.J[:, i] - self.b[i] > 0 ) - 1
+                #X[i] = 2 * ( X @ self.J[:, i] > 0 ) - 1
+                if self.dE(X)[i] < 0:
+                    X[i] *= -1
                 if history:
                     self.X_history.append(X.copy())
             if np.array_equal(X_prev, X):
@@ -218,20 +217,16 @@ class HopfieldNet4(HopfieldNet):
         if history:
             self.X_history = np.array(self.X_history)
 
-        return X[:self.D]
+        return X[:D]
 
     def is_local_min(self):
         #X_conv = self.X_train.copy()
         X = self.X_train.copy()
-        local_min = np.ones(self.K, dtype=bool)
+        local_min = np.zeros(self.K, dtype=bool)
         for n in range(self.K):
-            for i in range(self.D):
-                X_flip = X[n].copy()
-                X_flip[i] *= -1
-                if self.E(X_flip) < self.E(X[n]):
-                    local_min[n] = False
-                    break
+            local_min[n] = np.all(self.dE(self.X_train[n]) > 0)
             
+
         return local_min
 
 if __name__ == '__main__':
@@ -240,23 +235,22 @@ if __name__ == '__main__':
     mnist_bin = np.array(mnist.data > 128, dtype=np.int8)
     mnist_bin = mnist_bin * 2 -1
 
-    N = 2
+    N = 1000
 
     N_mnist, D = mnist_bin.shape 
     idx = np.random.choice(N_mnist, N, replace=False)
     mnist_train = mnist_bin[idx]
 
     #hopfield = HopfieldNet(mnist_train)
-    #hopfield = HopfieldNet4(mnist_train)
-    X0 = hopfield.corrupt_memory(frac=0.0)[0]
-    print(hopfield.is_local_min())
+    hopfield = HopfieldNetJK(mnist_train)
+    X0 = hopfield.corrupt_memory(frac=0.0)[2]
 
     #hopfield.learn_Jb(method='mpf')
     #hopfield.run_network(X0, max_iter=10)
-    #hopfield.learn_JbK()
+    hopfield.learn_JbK()
     hopfield.run_network(X0, max_iter=10)
 
-    if False:
+    if True:
         n_plot = 20
         end = int(len(hopfield.X_history)/3)
         d_frame = int(len(hopfield.X_history) / n_plot) + 1
