@@ -1,10 +1,12 @@
 import torch
-from torch.autograd import Variable
 from torch import optim
+from torch.autograd import Variable
+from torch.nn import functional as F
 import numpy as np
 from scipy import optimize
 import time
-from mpf_spin_glass import MPF_Glass as MPF
+
+from mpf_spin_glass import MPF_Glass_JK as MPF_JK
 
 TORCH_DOUBLE = torch.DoubleTensor
 
@@ -19,7 +21,7 @@ def get_rand_J(D):
     J = J - np.diag(np.diagonal(J))
     return J
 
-class MPF_Estimator(object):
+class MPF_Glass(object):
 
     def __init__(self, X):
         self.N, self.D = X.shape
@@ -36,7 +38,7 @@ class MPF_Estimator(object):
         b = theta[-self.D:]
         return J, b
 
-    def get_dE(self, theta_npy_arr):
+    def dE_glass(self, theta_npy_arr):
 
         theta_tensor = torch.from_numpy(theta_npy_arr).type(TORCH_DOUBLE)
         self.theta = Variable(theta_tensor, requires_grad=True)
@@ -55,6 +57,9 @@ class MPF_Estimator(object):
         dE = 2 * self.X * (self.X.mm(J_sym)) - 2 * self.X * b[None, :]
         return dE
 
+    def get_dE(self, theta):
+        return self.dE_glass(theta)
+
     def K_dK(self, theta):
         # Assign values
         dE = self.get_dE(theta)
@@ -69,7 +74,7 @@ class MPF_Estimator(object):
         K = K.data.numpy()[0]
         return K, dK
 
-    def learn_jb(self):
+    def learn(self):
         """
         Returns parameters estimated through MPF
         """
@@ -81,25 +86,47 @@ class MPF_Estimator(object):
         estimate = min_out[0] 
         return estimate
 
-                
+class MPF_Glass_Fourth(MPF_Glass):
+
+    def __init__(self, X, shape=None, M=None):
+        super().__init__(X)
+
+        if shape == None:
+            W = int(np.sqrt(self.D))
+            H = int(self.D / W)
+            self.shape = W, H
+        X_2d = X.reshape((self.N, *self.shape))
+        self.X_2d = Variable(torch.from_numpy(X_2d).type(TORCH_DOUBLE), requires_grad=False)
+
+        # Default matrix is 2 x 2 all ones
+        if M is None:
+            M = torch.ones(2,2).type(TORCH_DOUBLE)
+        else:
+            M = torch.from_numpy(M).type(TORCH_DOUBLE)
+
+        self.M = Variable(M, requires_grad=True)
+
+        XM = F.conv2d(
+                self.X_2d[:, None, :, :], self.M[None, None, :, :]
+                )
+
+        self.Q = 1 - 2*(XM.abs() == 2).double()
+
+    def dE4(self, K):
+        Q_pad = (F.pad(self.Q, (1, 1, 1, 1)))
+        return -2 * F.conv2d(Q_pad, self.M[None, None, :, :])
+
 if __name__ == '__main__':
-    D = 5
+    D = 9
     N = 3
     np.random.seed(15)
     X = np.random.randint(2, size=(N, D)) * 2 - 1
     J = get_rand_J(D)
     b = np.zeros(D)
 
+    glass_torch = MPF_Glass(X)
 
-    glass = MPF_Estimator(X)
-    glass_no_torch = MPF(X)
-
-    if True:
-        t0 = time.time()
-        print('-'*20, 'Direct Implimentation', '-'*20)
-        params = (glass.learn_jb())
-        print(glass.unflatten_params(params))
-        print(time.time() - t0)
-        t0 = time.time()
-        print(glass_no_torch.learn_jb())
-        print(time.time() - t0)
+    glass_JK_torch = MPF_Glass_Fourth(X)
+    glass_JK = MPF_JK(X)
+    print(glass_JK_torch.dE4(1))
+    print(glass_JK.dE4(1))

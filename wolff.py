@@ -3,6 +3,8 @@ import numpy as np
 import random
 import matplotlib.pylab as plt
 from mpf_ising_jk import MPF_Estimator
+from mpf_spin_glass_pytorch import MPF_Estimator as glass_torch
+from mpf_spin_glass import MPF_Glass as glass
 #np.random.seed(42)
 
 def stack_X(X, ratio = 1.5, pad = 1):
@@ -125,8 +127,8 @@ class WolffSampler(object):
         plt.show()
 
 if __name__ == '__main__':
-    N = 100
-    D = 50
+    N = 10
+    D = 20
 
     J = np.log(1 + np.sqrt(2))
     print('J : ', J)
@@ -136,5 +138,10 @@ if __name__ == '__main__':
     X = wolff.sample_X(N, display_time=True)
     mpf = MPF_Estimator(X)
     print(mpf.learn_jk())
+    mpf_torch = glass_torch(X.reshape(N, -1))
+    params = (mpf_torch.learn_jb())
+    print(mpf_torch.unflatten_params(params))
+    mpf_glass = glass(X.reshape(N, -1))
+    print(mpf_glass.learn_jb())
 
     wolff.plot_sample()
