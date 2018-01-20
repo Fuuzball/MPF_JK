@@ -14,7 +14,6 @@ def get_rand_J(D):
     return J
 
 class MPF_Glass(object):
-    print('Class: MPF_Glss -- Direct')
 
     def __init__(self, X, J0=None, b0=None):
         self.X = X
@@ -49,7 +48,6 @@ class MPF_Glass(object):
     def learn_jb(self):
         Jb = np.zeros(self.D * (self.D + 1))
 
-        print(self.X)
         min_out = optimize.fmin_l_bfgs_b(self.K_dK, Jb)
         estimate = min_out[0]
 
