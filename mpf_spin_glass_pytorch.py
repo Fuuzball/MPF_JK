@@ -31,6 +31,8 @@ class MPF_Glass(object):
         self.X = Variable(torch.from_numpy(X).type(torch.DoubleTensor), requires_grad=False)
         # Indices for the upper triangle (not including diagonals)
 
+        self.num_params = self.D **2 + self.D
+
     def flatten_params(self, J, b):
         return np.hstack((J.flatten(), b))
 
@@ -84,7 +86,8 @@ class MPF_Glass(object):
         estimate = min_out[0] 
         return estimate
 
-class MPF_Glass_Fourth(MPF_Glass):
+
+class MPF_Glass_HLE(MPF_Glass):
 
     def __init__(self, X, shape=None, M=None):
         super().__init__(X)
@@ -92,31 +95,92 @@ class MPF_Glass_Fourth(MPF_Glass):
         if shape == None:
             W = int(np.sqrt(self.D))
             H = int(self.D / W)
-            self.shape = W, H
-        X_2d = X.reshape((self.N, *self.shape))
+        else:
+            H, W = shape
+        self.H = H
+        self.W = W
+        X_2d = X.reshape((self.N, H, W))
         self.X_2d = Variable(torch.from_numpy(X_2d).double(), requires_grad=False)
 
-        # Default matrix is 2 x 2 all ones
+        # Default to fourth order interaction (JK model)
         if M == None:
-            M = torch.ones(2,2).double()
+            M = np.ones((2, 2))
+
+        self.M = M
+
+        # Get shape of M and determine the order of interaction
+        self.M_H, self.M_W = M.shape
+        self.N_M = (M == 1).sum().astype(float)
+
+        # Shape of the parameters to be fit
+        self.K_H = H - self.M_H + 1
+        self.K_W = W - self.M_W + 1
+
+        self.num_params = self.D**2 + self.D + (self.K_H * self.K_W)
+
+    def flatten_params(self, J, b, K):
+        if isinstance(J, np.ndarray):
+            assert isinstance(b, np.ndarray) and isinstance(K, np.ndarray), 'All parameters need to be of the same type (i.e. np.ndarray)'
+            return np.hstack((J.flatten(), b, K.flatten()))
+
+        if isinstance(J, Variable):
+            assert isinstance(b, Variable) and isinstance(K, Variable), 'All parameters need to be of the same type (i.e. pytorch Variable)'
+            J_flat = J.view(-1)
+            K_flat = K.view(-1)
+            theta = Variable(torch.zeros(len(J_flat) + len(b) + len(K_flat)))
+
+            start = 0
+            end = start + D**2
+            theta[start:end] = J_flat
+
+            start = end
+            end = start + D
+            theta[start:end] = b
+
+            start = end
+            end = start + self.K_H * self.K_W
+            theta[start:end] = K_flat
+            assert end == len(theta), 'Input parameters incorrect length. (len(theta) = {} but should be {})'.format(len(theta), end)
+
+            return theta
+
+    def unflatten_params(self, theta):
+        D = self.D
+        K_H = self.K_H
+        K_W = self.K_W
+
+        if isinstance(theta, Variable):
+            is_numpy = False
+        elif isinstance(theta, np.ndarray):
+            is_numpy = True
         else:
-            M = torch.from_numpy(M).double()
+            sys.exit('Parameters need to be a numpy array or a pytorch.autograd Variable')
 
-        self.interaction_order = (M == 1).sum()
 
-        self.M = Variable(M, requires_grad=True)
+        start = 0
+        end = start + D**2
+        J_flat = theta[start:end]
+        if is_numpy:
+            J = J_flat.reshape((D, D))
+        else:
+            J = J_flat.view((D, D))
 
-        XM = F.conv2d(
-                self.X_2d[:, None, :, :], self.M[None, None, :, :]
-                )
+        start = end
+        end = start + D
+        b = theta[start:end]
 
-        self.Q = 1 - 2*(XM.abs() == 2).double()
+        start = end
+        end = start + K_H * K_W
+        K_flat = theta[start:end]
+        if is_numpy:
+            K = K_flat.reshape((K_H, K_W))
+        else:
+            K = K_flat.view((K_H, K_W))
 
-    def dE4(self, K):
-        Q_pad = (F.pad(self.Q, (1, 1, 1, 1)))
-        return -2 * F.conv2d(Q_pad, self.M[None, None, :, :])
+        assert end == len(theta), 'Input parameters incorrect length. (len(theta) = {} but should be {})'.format(len(theta), end)
+        return J, b, K
 
-    def dE_HLE(self, K, M = None):
+    def dE_HLE(self, K):
 
         """
             Calculates the energy due to higher-order local interactions
@@ -126,29 +190,24 @@ class MPF_Glass_Fourth(MPF_Glass):
                                 The number of ones in M, N_M is the order of interaction.
                 K (np.array): A (H - M_H + 1) x (W - M_W + 1) pytorch tensor denoting the coupling strength
 
-            Returns energy difference due to flipping bits of X_2d
+            Returns energy difference due to flipping bits of X_2d in matrix of shape N x H x W
 
         """
         
-        # Default to fourth order interaction (JK model)
-        if M == None:
-            M = np.ones((2, 2))
-
-        # Get shape of M and determine the order of interaction
-        M_H, M_W = M.shape
-        # Order of interaction
-        N_M = (M == 1).sum().astype(float)
-
+        M_H = self.M_H
+        M_W = self.M_W
+        N_M = self.N_M
+        
         # Flipped to do real convolution (as opposed to xcorrelation)
-        M_flipped = M[::-1, ::-1].copy()
+        M_flipped = self.M[::-1, ::-1].copy()
 
         # Turn M into pytorch Variable
-        M = torch_double_var(M, False)
+        M = torch_double_var(self.M, False)
         M_flipped = torch_double_var(M_flipped, False)
 
         # Make convolution to count number of spin+ - spin-
         XM = F.conv2d(
-                self.X_2d[:, None, :, :], self.M[None, None, :, :]
+                self.X_2d[:, None, :, :], M[None, None, :, :]
                 )
 
         # Get number of spin-
@@ -159,21 +218,27 @@ class MPF_Glass_Fourth(MPF_Glass):
 
         # Energy contribution to interaction at each position
         #K = Variable(torch.from_numpy(K), requires_grad=True)
-        print(K)
-        print('-'*20)
-        print(Q)
         E = K * Q
-        print(E)
+
+        # Convolve with inverted matrix M to get dE
         E_padded = F.pad(E, (M_W-1, M_W-1, M_H-1, M_H-1))
-        print(M_flipped)
-        dE = F.conv2d(
+        dE = -2 * F.conv2d(
                 E_padded, M_flipped[None, None, :, :]
                 )
-        print(dE)
+
+        return dE
+
+    def get_dE(self, theta):
+        J, b, K = self.unflatten_params(theta)
+        dE = self.dE_glass(J, b)
+        dE += self.dE_HLE(K).view(self.N, -1)
+        return dE
+
+
 
 
 if __name__ == '__main__':
-    D = 9
+    D = 4
     N = 3
     np.random.seed(15)
     X = np.random.randint(2, size=(N, D)) * 2 - 1
@@ -182,15 +247,20 @@ if __name__ == '__main__':
 
     glass_torch = MPF_Glass(X)
     glass = MPF_GlassDirect(X)
-    glass_JK_torch = MPF_Glass_Fourth(X)
+    glass_JK_torch = MPF_Glass_HLE(X)
     glass_JK = MPF_JK(X)
 
 
     #print(glass_JK_torch.dE4(1))
     #print(glass_JK.dE4(1))
 
-    K = np.arange(4).reshape((2,2))
+    K = np.ones((2, 2))
     K = torch_double_var(K, True)
-    print(glass_JK_torch.dE_HLE(K))
-    #print(glass_JK_torch.Q)
+    J = torch_double_var(J, True)
+    b = torch_double_var(b, True)
+    theta = (glass_JK_torch.learn())
+    print(glass_JK_torch.unflatten_params(theta))
+
+    theta = glass_JK.learn_jbk()
+    print(theta)
 
