@@ -5,7 +5,6 @@ from scipy.signal import convolve
 from scipy import optimize
 import time
 import matplotlib.pylab as plt
-from mpf_ising_jk import MPF_Estimator
 
 np.random.seed(0)
 

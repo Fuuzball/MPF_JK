@@ -2,9 +2,6 @@ import time
 import numpy as np
 import random
 import matplotlib.pylab as plt
-from mpf_ising_jk import MPF_Estimator
-from mpf_spin_glass_pytorch import MPF_Estimator as glass_torch
-from mpf_spin_glass import MPF_Glass as glass
 #np.random.seed(42)
 
 def stack_X(X, ratio = 1.5, pad = 1):

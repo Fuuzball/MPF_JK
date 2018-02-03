@@ -8,6 +8,7 @@ import matplotlib.pylab as plt
 from gibbs import GibbsSampler
 from wolff import WolffSampler
 from mpf_ising_jk import MPF_Estimator
+from mpf_local_higher_order import MPF_Glass_HLE
 np.set_printoptions(precision=3)
 Seed = 0
 if Seed:
@@ -95,14 +96,6 @@ class EffectiveWolffSampler(WolffSampler):
         if display_time:
             print('Sampling took {:.4f}s'.format(time.process_time() - t0))
         return X
-D = 18
-J = [1.42953953,  0.30088594, -0.09356875, -0.10985571]
-J = [0.6905666,  0.15444032,  -0.06169692,  -0.05076923]
-K = 0.06337537
-K = 0.07739759
-JK = np.hstack((J, K)) 
-
-N_local = 500
 
 class SLMC_Wolff(object):
 
@@ -116,6 +109,10 @@ class SLMC_Wolff(object):
         print('Sample paramters : {}'.format(JK))
 
     def sample_gibbs(self):
+        """
+            Using Gibbs sampling, get effective energy and effective coupling E0, J_eff
+        """
+
         self.gibbs = GibbsSampler(self.D, self.J, self.K)
         print('Sampling with local update rules (Gibbs)...')
         self.X_gibbs = self.gibbs.sample_X(self.N_g, self.burn_g, self.thin_g)
@@ -129,6 +126,10 @@ class SLMC_Wolff(object):
         print('Effective parameters -- E0 : {}, J_eff : {}'.format(self.E0, self.J_eff))
 
     def sample_wolff(self):
+        """
+            Given J_eff, do wolff sampling to return final X
+        """
+
         self.wolff = EffectiveWolffSampler(self.D, self.J_eff, self.J, self.K)
         self.X_wolff = self.wolff.sample_X(self.N_w, self.burn_w, self.thin_w)
         mpf = MPF_Estimator(self.X_wolff)
@@ -140,37 +141,40 @@ class SLMC_Wolff(object):
     def plot_wolff(self):
         self.wolff.plot_sample()
 
-gibbs_params = (30, 3000, 3000)
-wolff_params = (30, 300, 300)
+if __name__ == '__main__':
 
-slmc = SLMC_Wolff(D, J, K, gibbs_params, wolff_params)
-slmc.sample_gibbs()
-mpf_J = MPF_Estimator(slmc.X_gibbs, fit_params=[1,0,0,0,0])
-print(mpf_J.learn_jk())
+    D = 10
+    J = [.4, 0, 0, 0]
+    K = 0.30
+    JK = np.hstack((J, K)) 
+
+    N_local = 500
+    gibbs_params = (300, 3000, 3000)
+    wolff_params = (30, 300, 300)
 
 
-if False:
-    gibbs = GibbsSampler(D, J, K)
-    print('Sample paramters : {}'.format(JK))
-    print('Sampling with local update rules (Gibbs)...')
-    X_local = gibbs.sample_X(N_local, burn_in, thin)
-    mpf = MPF_Estimator(X_local)
-    print('Estimated parameters : {}'.format(mpf.learn_jk()))
-    C1 = mpf.total_second_corr()[0]
-    E = mpf.energy(J, K)
-    a = np.hstack((np.ones(N_local)[:, None], -C1[:, None]))
-    E0, J_eff = np.linalg.lstsq(a, E)[0]
-    print('Effective parameters -- E0 : {}, J_eff : {}'.format(E0, J_eff))
-    #gibbs.plot_sample()
-    #plt.show()
+    if False:
+        gibbs = GibbsSampler(D, J, K)
+        print('Sample paramters : {}'.format(JK))
+        print('Sampling with local update rules (Gibbs)...')
+        X_local = gibbs.sample_X(N_local, burn_in, thin)
+        mpf = MPF_Estimator(X_local)
+        print('Estimated parameters : {}'.format(mpf.learn_jk()))
+        C1 = mpf.total_second_corr()[0]
+        E = mpf.energy(J, K)
+        a = np.hstack((np.ones(N_local)[:, None], -C1[:, None]))
+        E0, J_eff = np.linalg.lstsq(a, E)[0]
+        print('Effective parameters -- E0 : {}, J_eff : {}'.format(E0, J_eff))
+        #gibbs.plot_sample()
+        #plt.show()
 
-#J_eff = 1.38
+    J_eff = 1.38
 
-if False:
-    wolff = EffectiveWolffSampler(D, J_eff,J ,K)
-    X = wolff.sample_X(60, 300, 300)
-    mpf = MPF_Estimator(X)
-    print('Estimated parameters : {}'.format(mpf.learn_jk()))
-    wolff.plot_sample()
-    plt.show()
+    if True:
+        wolff = EffectiveWolffSampler(D, J_eff,J ,K)
+        X = wolff.sample_X(60, 300, 300)
+        mpf = MPF_Estimator(X)
+        print('Estimated parameters : {}'.format(mpf.learn_jk()))
+        wolff.plot_sample()
+        plt.show()
 
