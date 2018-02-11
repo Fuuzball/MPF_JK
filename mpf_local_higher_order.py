@@ -416,7 +416,6 @@ class HOLIGlass(object):
             start = end
         return J, b, K
 
-
     def dE_glass(self, J, b):
         logger.debug('Calling dE_glass')
         if not torch.equal(J, J.t()):
@@ -427,7 +426,6 @@ class HOLIGlass(object):
         mask = Variable((torch.ones((D,D)) - torch.eye(D)).double(), requires_grad=False)
         J_sym = 0.5 * (J.t() + J) * mask
         dE = 2 * self.X * (self.X.mm(J_sym)) - 2 * self.X * b[None, :]
-
         return dE
 
     def get_dE(self, theta):
