@@ -401,48 +401,21 @@ class HOLIGlass(object):
         return theta
 
     def unflatten_params(self, theta):
-
-        theta = make_arr_torch(theta, 'theta')
-        self.assert_param_shape(theta, 'theta', (self.num_params))
-
-        J_flat = theta[0:D**2]
-
-
-
         D = self.D
-        K_H = self.K_H
-        K_W = self.K_W
+        theta = make_arr_torch(theta, 'theta')
+        self.assert_param_shape(theta, 'theta', (self.num_params, ))
 
-        if isinstance(theta, Variable):
-            is_numpy = False
-        elif isinstance(theta, np.ndarray):
-            is_numpy = True
-        else:
-            sys.exit('Parameters need to be a numpy array or a pytorch.autograd Variable')
+        J = theta[0:D**2].view((D, D))
+        b = theta[D**2:D**2 + D]
 
-
-        start = 0
-        end = start + D**2
-        J_flat = theta[start:end]
-        if is_numpy:
-            J = J_flat.reshape((D, D))
-        else:
-            J = J_flat.view((D, D))
-
-        start = end
-        end = start + D
-        b = theta[start:end]
-
-        start = end
-        end = start + K_H * K_W
-        K_flat = theta[start:end]
-        if is_numpy:
-            K = K_flat.reshape((K_H, K_W))
-        else:
-            K = K_flat.view((K_H, K_W))
-
-        assert end == len(theta), 'Input parameters incorrect length. (len(theta) = {} but should be {})'.format(len(theta), end)
+        start = D**2 + D
+        K = []
+        for (k_h, k_w) in self.k_dims:
+            end = start + k_h * k_w
+            K.append(theta[start:end].view((k_h, k_w)))
+            start = end
         return J, b, K
+
 
     def dE_glass(self, J, b):
         logger.debug('Calling dE_glass')
@@ -492,7 +465,9 @@ class HOLIGlass(object):
         return estimate
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(format='%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
+    datefmt='%d-%m-%Y:%H:%M:%S',
+    level=logging.DEBUG)
     D = 16
     N = 100
 
@@ -509,8 +484,10 @@ if __name__ == '__main__':
 
     holi = HOLIGlass(X, M=[M1, M2])
     J, b, K = (holi.get_random_params())
+    print(K)
     theta = holi.flatten_params(J, b, K)
-    print(theta)
+    J, b, K = holi.unflatten_params(theta)
+    print(K)
 
 
 if False:
