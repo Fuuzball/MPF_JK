@@ -366,7 +366,6 @@ class HOLIGlass(object):
 
         return J, b, K
 
-
     def flatten_params(self, J, b, K):
         logger.debug('Calling function flatten_params')
         logger.debug('-'*20 + 'J' + '-'*20 + '\n{}'.format(J))
@@ -378,7 +377,7 @@ class HOLIGlass(object):
 
         # Make all arrays torch variables and assert their shape to be correct
         J = make_arr_torch(J, 'J')
-        b = make_arr_torch(b, 'J')
+        b = make_arr_torch(b, 'b')
 
         D = self.D
 
@@ -401,40 +400,15 @@ class HOLIGlass(object):
 
         return theta
 
-        if not (isinstance(J, np.ndarray) or isinstance(J, Variable)):
-            logger.error('Parameter J is not passed as either numpy array or torch variable')
-            
-            sys.exit()
-
-        if isinstance(J, np.ndarray):
-            logger.debug('Parameters are numpy arrays')
-            assert isinstance(b, np.ndarray) and isinstance(K, np.ndarray), 'All parameters need to be of the same type (i.e. np.ndarray)'
-            return np.hstack((J.flatten(), b, K.flatten()))
-
-        if isinstance(J, Variable):
-            logger.debug('Parameters are torch variables')
-            assert isinstance(b, Variable) and isinstance(K, Variable), 'All parameters need to be of the same type (i.e. pytorch Variable)'
-            J_flat = J.view(-1)
-            K_flat = K.view(-1)
-            theta = Variable(torch.zeros(len(J_flat) + len(b) + len(K_flat)))
-
-            D = self.D
-            start = 0
-            end = start + D**2
-            theta[start:end] = J_flat
-
-            start = end
-            end = start + D
-            theta[start:end] = b
-
-            start = end
-            end = start + self.K_H * self.K_W
-            theta[start:end] = K_flat
-            assert end == len(theta), 'Input parameters incorrect length. (len(theta) = {} but should be {})'.format(len(theta), end)
-
-            return theta.double()
-
     def unflatten_params(self, theta):
+
+        theta = make_arr_torch(theta, 'theta')
+        self.assert_param_shape(theta, 'theta', (self.num_params))
+
+        J_flat = theta[0:D**2]
+
+
+
         D = self.D
         K_H = self.K_H
         K_W = self.K_W
