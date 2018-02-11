@@ -5,10 +5,10 @@ from scipy.signal import convolve
 from scipy import optimize
 import time
 import matplotlib.pylab as plt
-from gibbs import GibbsSampler
-from wolff import WolffSampler
+from gibbs_sampler import GibbsSampler
+from wolff_sampler import WolffSampler
 from mpf_ising_jk import MPF_Estimator
-from mpf_local_higher_order import MPF_Glass_HLE
+from mpf_local_higher_order import MPF_Glass_HOLI
 np.set_printoptions(precision=3)
 Seed = 0
 if Seed:

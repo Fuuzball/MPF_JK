@@ -5,12 +5,17 @@ from torch.nn import functional as F
 import numpy as np
 from scipy import optimize
 import time
+import logging
+import sys
 
 from mpf_spin_glass_direct import MPF_Glass_JK as MPF_JK
 from mpf_spin_glass_direct import MPF_Glass as MPF_GlassDirect
 
-def get_rand_J(D):
+logger = logging.getLogger(__name__)
+#logging.basicConfig(level=logging.ERROR)
+print(logger)
 
+def get_rand_J(D):
     """
         Return random symmetric D x D matrix J with vanishing diagonals
     """
@@ -23,6 +28,11 @@ def get_rand_J(D):
 def torch_double_var(npy_arry, grad):
     return Variable(torch.from_numpy(npy_arry).double(), requires_grad=grad)
 
+def is_ndarray(arr):
+    return isinstance(arr, np.ndarray) 
+
+def is_Variable(arr):
+    return isinstance(arr, Variable) 
 
 class MPF_Glass(object):
 
@@ -44,7 +54,7 @@ class MPF_Glass(object):
 
     def dE_glass(self, J, b):
         if not torch.equal(J, J.t()):
-            print("Warning: J is not symmetric")
+            logger.debug('J is not symmetric')
 
         # Enforce the matrix to be symmetric and have vanishing diagonals
         D = self.D
@@ -89,9 +99,10 @@ class MPF_Glass(object):
         return estimate
 
 
-class MPF_Glass_HLE(MPF_Glass):
+class MPF_Glass_HOLI(MPF_Glass):
 
     def __init__(self, X, shape=None, M=None):
+        logger.info('Instantiating MPF_Glass_HOLI')
         super().__init__(X)
 
         if shape == None:
@@ -121,16 +132,31 @@ class MPF_Glass_HLE(MPF_Glass):
         self.num_params = self.D**2 + self.D + (self.K_H * self.K_W)
 
     def flatten_params(self, J, b, K):
+        logger.debug('Calling function flatten_params')
+        logger.debug('-'*20 + 'J' + '-'*20 + '\n{}'.format(J))
+        logger.debug('-'*20 + 'b' + '-'*20 + '\n{}'.format(b))
+        logger.debug('-'*20 + 'K' + '-'*20 + '\n{}'.format(K))
+
+        if not (isinstance(J, np.ndarray) or isinstance(J, Variable)):
+            logger.error('Parameter J is not passed as either numpy array or torch variable')
+            
+            sys.exit()
+
+
+
         if isinstance(J, np.ndarray):
+            logger.debug('Parameters are numpy arrays')
             assert isinstance(b, np.ndarray) and isinstance(K, np.ndarray), 'All parameters need to be of the same type (i.e. np.ndarray)'
             return np.hstack((J.flatten(), b, K.flatten()))
 
         if isinstance(J, Variable):
+            logger.debug('Parameters are torch variables')
             assert isinstance(b, Variable) and isinstance(K, Variable), 'All parameters need to be of the same type (i.e. pytorch Variable)'
             J_flat = J.view(-1)
             K_flat = K.view(-1)
             theta = Variable(torch.zeros(len(J_flat) + len(b) + len(K_flat)))
 
+            D = self.D
             start = 0
             end = start + D**2
             theta[start:end] = J_flat
@@ -144,7 +170,7 @@ class MPF_Glass_HLE(MPF_Glass):
             theta[start:end] = K_flat
             assert end == len(theta), 'Input parameters incorrect length. (len(theta) = {} but should be {})'.format(len(theta), end)
 
-            return theta
+            return theta.double()
 
     def unflatten_params(self, theta):
         D = self.D
@@ -182,7 +208,9 @@ class MPF_Glass_HLE(MPF_Glass):
         assert end == len(theta), 'Input parameters incorrect length. (len(theta) = {} but should be {})'.format(len(theta), end)
         return J, b, K
 
-    def dE_HLE(self, K):
+    def dE_HOLI(self, K):
+        logger.debug('Calling dE_HOLI')
+        logger.debug('-'*20 + 'K' + '-'*20 + '\n{}'.format(K))
 
         """
             Calculates the energy due to higher-order local interactions
@@ -231,9 +259,11 @@ class MPF_Glass_HLE(MPF_Glass):
         return dE
 
     def get_dE(self, theta):
+        logger.debug('Calling get_dE')
+        logger.debug('-'*20 + 'theta' + '-'*20 + '\n{}'.format(theta))
         J, b, K = self.unflatten_params(theta)
         dE = self.dE_glass(J, b)
-        dE += self.dE_HLE(K).view(self.N, -1)
+        dE += self.dE_HOLI(K).view(self.N, -1)
         return dE
 
 
@@ -261,7 +291,7 @@ if __name__ == '__main__':
 
     glass_torch = MPF_Glass(X)
     glass = MPF_GlassDirect(X)
-    glass_HLE_torch = MPF_Glass_HLE(X, M=M)
+    glass_HOLI_torch = MPF_Glass_HOLI(X, M=M)
     glass_JK = MPF_JK(X)
 
 
@@ -279,9 +309,9 @@ if __name__ == '__main__':
         print(theta)
 
 
-    print('-'*20, 'HLE', '-'*20)
-    theta = (glass_HLE_torch.learn())
-    J, b, K = (glass_HLE_torch.unflatten_params(theta))
+    print('-'*20, 'HOLI', '-'*20)
+    theta = (glass_HOLI_torch.learn())
+    J, b, K = (glass_HOLI_torch.unflatten_params(theta))
     print('-'*20, 'J',  '-'*20)
     print(J)
     print('-'*20, 'b',  '-'*20)
