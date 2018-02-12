@@ -7,6 +7,7 @@ from scipy import optimize
 import time
 import logging
 import sys
+from collections import OrderedDict
 
 from mpf_spin_glass_direct import MPF_Glass_JK as MPF_JK
 from mpf_spin_glass_direct import MPF_Glass as MPF_GlassDirect
@@ -39,13 +40,14 @@ def is_Variable(arr):
 
 def make_arr_torch(arr, arr_name):
     if is_ndarray(arr):
-        return  torch_double_var(arr, False)
+        return torch_double_var(arr, False)
     elif is_Variable(arr):
-        return arr
+        return arr.double()
     else:
         logger.error(arr_name + 'needs to be either np array or torch variable')
         sys.exit()
 
+##### Outdated classes #######
 
 class MPF_Glass(object):
     def __init__(self, X):
@@ -278,16 +280,18 @@ class MPF_Glass_HOLI(MPF_Glass):
         dE += self.dE_HOLI(K).view(self.N, -1)
         return dE
 
+##### Outdated classes #######
 
 class HOLIGlass(object):
 
-    def __init__(self, X, shape_2d=None, M=None):
+    def __init__(self, X, shape_2d=None, M=None, params=['J_glass', 'b']):
+        logger.info('Initializing HOLIGlass...')
         self.N, self.D = X.shape
-        #Convert to float
-        self.X = Variable(torch.from_numpy(X).type(torch.DoubleTensor), requires_grad=False)
-        # Indices for the upper triangle (not including diagonals)
+        self.param_names = param_names
 
-        self.num_params = self.D **2 + self.D
+        #Convert to float
+        #self.X = Variable(torch.from_numpy(X).type(torch.DoubleTensor), requires_grad=False)
+        #self.X = make_arr_torch(X, 'X')
 
         # Default shape to square
         if shape_2d == None:
@@ -298,6 +302,8 @@ class HOLIGlass(object):
         self.H = H
         self.W = W
 
+        self.X = X
+
         # Default to fourth order interaction (JK model)
         if M is None:
             M = [
@@ -305,30 +311,43 @@ class HOLIGlass(object):
                     ]
         self.M = M
 
-        # Set number of parameters
-
-
-        self.k_dims = []
-        self.num_params = self.D**2 + self.D # Size of J + b
-
-        for m in self.M:
-            m_h, m_w = m.shape
-            k_h = H - m_h + 1
-            k_w = W - m_w + 1
-            self.k_dims.append((k_h, k_w))
-            self.num_params += k_h * k_w
+        # Define param shape
+        self.param_shape = self.get_param_shape()
+        # Set number of parameter
+        self.num_params = 0
+        for shape in self.param_shape.values():
+            len = 1
+            for d in shape:
+                len *= d
+            self.num_params += len
 
         if False:
-            # Get shape of M and determine the order of interaction
-            self.M_H, self.M_W = M.shape
-            self.N_M = (M == 1).sum().astype(float)
+            for m in self.M:
+                m_h, m_w = m.shape
+                k_h = H - m_h + 1
+                k_w = W - m_w + 1
+                self.k_dims.append((k_h, k_w))
+                self.num_params += k_h * k_w
 
-            # Shape of the parameters to be fit
-            self.K_H = H - self.M_H + 1
-            self.K_W = W - self.M_W + 1
+    def get_param_shape(self):
+        param_shape = OrderedDict()
+        for name in params:
+            if name == 'J_glass':
+                param_shape['J_glass'] = (self.D, self.D)
+            elif name == 'b':
+                param_shape['b'] = (self.D, )
+            else:
+                logger.error('Parameter name {} is not recognized'.format_map(name))
+                sys.exit()
 
-            self.num_params = self.D**2 + self.D + (self.K_H * self.K_W)
+        for n, m in enumerate(self.M):
+            m_h, m_w = m.shape
+            k_h = self.H - m_h + 1
+            k_w = self.W - m_w + 1
+            param_shape['k_%d'%n] = (k_h, k_w)
 
+        return param_shape
+        
     @property
     def X(self):
         return self._X
@@ -336,10 +355,12 @@ class HOLIGlass(object):
     @X.setter
     def X(self, new_X):
         self._X = make_arr_torch(new_X, 'X')
+        self._X_2d =  self._X.view((self.N, self.H, self.W))
 
     @property
     def X_2d(self):
-        return self.X.view((self.N, self.H, self.W))
+        #return self.X.view((self.N, self.H, self.W))
+        return self._X_2d
 
     def assert_param_shape(self, param, name, shape):
         if not param.shape == shape:
@@ -428,12 +449,63 @@ class HOLIGlass(object):
         dE = 2 * self.X * (self.X.mm(J_sym)) - 2 * self.X * b[None, :]
         return dE
 
+    def dE_HOLI(self, K, M):
+        logger.debug('Calling dE_HOLI')
+        logger.debug('-'*20 + 'K' + '-'*20 + '\n{}'.format(K))
+
+        """
+            Calculates the energy due to higher-order local interactions
+
+            Args:
+                M (np.array): A Binary (0, 1) matrix of aribtrary size M_H x M_W which sets the sites relevant for interaction.
+                                The number of ones in M, N_M is the order of interaction.
+                K (np.array): A (H - M_H + 1) x (W - M_W + 1) pytorch tensor denoting the coupling strength
+
+            Returns energy difference due to flipping bits of X_2d in matrix of shape N x H x W
+
+        """
+        
+        M_H, M_W = M.shape
+        N_M = (M == 1).sum().astype(float)
+        
+        # Flipped to do real convolution (as opposed to xcorrelation)
+        M_flipped = M[::-1, ::-1].copy()
+
+        # Turn M into pytorch Variable
+        M = torch_double_var(M, False)
+        M_flipped = torch_double_var(M_flipped, False)
+
+        # Make convolution to count number of spin+ - spin-
+        XM = F.conv2d(
+                self.X_2d[:, None, :, :], M[None, None, :, :]
+                )
+
+        # Get number of spin-
+        N_minus = -(XM - N_M) / 2
+
+        # Even spin- : 1 odd spin- : -1
+        Q = 2 * (N_minus % 2 == 0).double() - 1
+
+        # Energy contribution to interaction at each position
+        #K = Variable(torch.from_numpy(K), requires_grad=True)
+        E = K * Q
+
+        # Convolve with inverted matrix M to get dE
+        E_padded = F.pad(E, (M_W-1, M_W-1, M_H-1, M_H-1))
+        dE = -2 * F.conv2d(
+                E_padded, M_flipped[None, None, :, :]
+                )
+
+        return dE
+
     def get_dE(self, theta):
-        D = self.D
-        assert len(theta) == D**2 + D, "The number of parameters is incorrect"
-        J = theta[:-D].view(D, D)
-        b = theta[-D:]
-        return self.dE_glass(J, b)
+        logger.debug('Calling get_dE')
+        logger.debug('-'*20 + 'theta' + '-'*20 + '\n{}'.format(theta))
+        J, b, K = self.unflatten_params(theta)
+        dE = self.dE_glass(J, b)
+        for k, m in zip(K, self.M):
+            dE += self.dE_HOLI(k, m).view(self.N, -1)
+        return dE
 
     def K_dK(self, theta_npy_arr):
         theta = torch_double_var(theta_npy_arr, True)
@@ -450,23 +522,37 @@ class HOLIGlass(object):
         K = K.data.numpy()[0]
         return K, dK
 
-    def learn(self):
+    def learn(self, unflatten=True):
         """
         Returns parameters estimated through MPF
         """
 
-        # Initial parameters
-        theta = np.zeros(self.num_params) 
+        logger.info('Start fitting parameters...')
+        t0 = time.time()
 
-        min_out = optimize.fmin_l_bfgs_b(self.K_dK, theta)
+        # Initial parameters
+        #theta = np.zeros(self.num_params) 
+        theta = Variable(torch.zeros(self.num_params))
+        logger.debug('-'*20 + 'theta' + '-'*20 + '\n{}'.format(theta))
+
+        def cb_func(params):
+            logger.info(params)
+
+        min_out = optimize.fmin_l_bfgs_b(self.K_dK, theta, disp=True)
         estimate = min_out[0] 
-        return estimate
+
+        logger.info('Fitting took {:.4f}s'.format(time.time() - t0))
+
+        if unflatten:
+            return self.unflatten_params(estimate)
+        else:
+            return estimate
 
 if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
     datefmt='%d-%m-%Y:%H:%M:%S',
-    level=logging.DEBUG)
-    D = 16
+    level=logging.INFO)
+    D = 100
     N = 100
 
     X = np.random.randint(2, size=(N, D)) * 2 - 1
@@ -481,62 +567,9 @@ if __name__ == '__main__':
             )
 
     holi = HOLIGlass(X, M=[M1, M2])
-    J, b, K = (holi.get_random_params())
-    print(K)
+    print(holi.param_shape)
+    J, b, K = holi.get_random_params()
     theta = holi.flatten_params(J, b, K)
-    J, b, K = holi.unflatten_params(theta)
-    print(K)
-
-
-if False:
-    logging.basicConfig(level=logging.INFO)
-    D = 100
-    N = 1000
-    np.random.seed(15)
-    X = np.random.randint(2, size=(N, D)) * 2 - 1
-    X = (np.random.random(size=(N, D)) < 0.3) * 2 - 1
-    X[:, 0] = 1
-    X[:, 2] = 1
-    X[:, 11] = 1
-    X[:, 20] = 1
-    X[:, 22] = 1
-    J = get_rand_J(D)
-    b = np.zeros(D)
-
-    M = np.array(
-            [
-                [1, 0, 1],
-                [0, 1, 0],
-                [1, 0, 1]
-                ]
-            )
-
-    glass_torch = MPF_Glass(X)
-    glass = MPF_GlassDirect(X)
-    glass_HOLI_torch = MPF_Glass_HOLI(X, M=M)
-    glass_JK = MPF_JK(X)
-
-
-    #print(glass_JK_torch.dE4(1))
-    #print(glass_JK.dE4(1))
-    if False:
-        K = np.ones((2, 2))
-        K = torch_double_var(K, True)
-        J = torch_double_var(J, True)
-        b = torch_double_var(b, True)
-        theta = (glass_JK_torch.learn())
-        print(glass_JK_torch.unflatten_params(theta))
-
-        theta = glass_JK.learn_jbk()
-        print(theta)
-
-
-    print('-'*20, 'HOLI', '-'*20)
-    theta = (glass_HOLI_torch.learn())
-    J, b, K = (glass_HOLI_torch.unflatten_params(theta))
-    print('-'*20, 'J',  '-'*20)
+    JJ, bb, KK = holi.unflatten_params(theta)
     print(J)
-    print('-'*20, 'b',  '-'*20)
-    print(b)
-    print('-'*20, 'K',  '-'*20)
-    print(K)
+    print(JJ)
