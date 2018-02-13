@@ -287,7 +287,6 @@ class HOLIGlass(object):
     def __init__(self, X, shape_2d=None, M=None, params=['J_glass', 'b']):
         logger.info('Initializing HOLIGlass...')
         self.N, self.D = X.shape
-        self.param_names = param_names
 
         #Convert to float
         #self.X = Variable(torch.from_numpy(X).type(torch.DoubleTensor), requires_grad=False)
@@ -312,7 +311,7 @@ class HOLIGlass(object):
         self.M = M
 
         # Define param shape
-        self.param_shape = self.get_param_shape()
+        self.param_shape = self.get_param_shape(params)
         # Set number of parameter
         self.num_params = 0
         for shape in self.param_shape.values():
@@ -329,7 +328,7 @@ class HOLIGlass(object):
                 self.k_dims.append((k_h, k_w))
                 self.num_params += k_h * k_w
 
-    def get_param_shape(self):
+    def get_param_shape(self, params):
         param_shape = OrderedDict()
         for name in params:
             if name == 'J_glass':
@@ -370,6 +369,18 @@ class HOLIGlass(object):
             logger.debug('Parameter {} has the correct shape of {}'.format(name, shape))
 
     def get_random_params(self, req_grad=False):
+        params = {}
+
+        for p_name in self.param_shape:
+            shape = self.param_shape[p_name]
+            param = np.random.normal(size=shape)
+            if p_name == 'J_glass':
+                param += param.T
+                np.fill_diagonal(param, 0)
+            params[p_name] = torch_double_var(param, req_grad)
+
+        return params
+
         D = self.D
         J = np.random.normal(size=(D, D))
         J += J.T
@@ -387,11 +398,32 @@ class HOLIGlass(object):
 
         return J, b, K
 
-    def flatten_params(self, J, b, K):
+    def flatten_params(self, params):
         logger.debug('Calling function flatten_params')
-        logger.debug('-'*20 + 'J' + '-'*20 + '\n{}'.format(J))
-        logger.debug('-'*20 + 'b' + '-'*20 + '\n{}'.format(b))
-        logger.debug('-'*20 + 'K' + '-'*20 + '\n{}'.format(K))
+        #logger.debug('-'*20 + 'J' + '-'*20 + '\n{}'.format(J))
+
+        # Check if number of params are correct
+        if len(params) != len(self.param_shape):
+            logger.error('Number of input params ({}) is different from number of declared params ({})'.format(len(params), len(self.param_shape)))
+            sys.exit()
+
+        params_list = []
+        for f_name in params:
+            shape = self.param_shape[f_name]
+            param = params[f_name]
+            self.assert_param_shape(param, f_name, shape)
+            params_list.append(param.view(-1))
+
+        return torch.cat(params_list)
+        
+        
+
+
+
+
+        return len(params)
+
+
 
         # Initialize empty theta
         theta = Variable(torch.zeros(self.num_params))
@@ -422,6 +454,23 @@ class HOLIGlass(object):
         return theta
 
     def unflatten_params(self, theta):
+        theta = make_arr_torch(theta, 'theta')
+        start = 0
+        params = {}
+        for f_name in self.param_shape:
+            shape = self.param_shape[f_name]
+            len = 1
+            for d in shape:
+                len *= d
+            end = start + len
+
+            params[f_name] = theta[start:end].view(shape)
+            start = end
+
+        return params
+            
+
+
         D = self.D
         theta = make_arr_torch(theta, 'theta')
         self.assert_param_shape(theta, 'theta', (self.num_params, ))
@@ -501,9 +550,18 @@ class HOLIGlass(object):
     def get_dE(self, theta):
         logger.debug('Calling get_dE')
         logger.debug('-'*20 + 'theta' + '-'*20 + '\n{}'.format(theta))
-        J, b, K = self.unflatten_params(theta)
-        dE = self.dE_glass(J, b)
-        for k, m in zip(K, self.M):
+        #J, b, K = self.unflatten_params(theta)
+        params = self.unflatten_params(theta)
+
+        #TODO: Impliment case when b is not a param
+        if 'J_glass' in params:
+            J = params['J_glass']
+            b = params['b']
+            dE = self.dE_glass(J, b)
+
+        k_params = [params[p] for p in params if 'k_' in p]
+
+        for k, m in zip(k_params, self.M):
             dE += self.dE_HOLI(k, m).view(self.N, -1)
         return dE
 
@@ -552,8 +610,8 @@ if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
     datefmt='%d-%m-%Y:%H:%M:%S',
     level=logging.INFO)
-    D = 100
-    N = 100
+    D = 9
+    N = 1000
 
     X = np.random.randint(2, size=(N, D)) * 2 - 1
 
@@ -567,9 +625,5 @@ if __name__ == '__main__':
             )
 
     holi = HOLIGlass(X, M=[M1, M2])
-    print(holi.param_shape)
-    J, b, K = holi.get_random_params()
-    theta = holi.flatten_params(J, b, K)
-    JJ, bb, KK = holi.unflatten_params(theta)
-    print(J)
-    print(JJ)
+    print(holi.learn())
+    
