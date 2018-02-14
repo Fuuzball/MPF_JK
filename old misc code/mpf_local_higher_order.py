@@ -101,6 +101,14 @@ class MPF_Glass(object):
         K = K.data.numpy()[0]
         return K, dK
 
+    def K(self, theta_npy_arr):
+        theta = torch_double_var(theta_npy_arr, True)
+        # Assign values
+        dE = self.get_dE(theta)
+        Knd = torch.exp(-0.5 * dE)
+        K = Knd.sum()
+        return K, dK
+
     def learn(self):
         """
         Returns parameters estimated through MPF
@@ -112,6 +120,9 @@ class MPF_Glass(object):
         min_out = optimize.fmin_l_bfgs_b(self.K_dK, theta)
         estimate = min_out[0] 
         return estimate
+
+
+
 
 
 class MPF_Glass_HOLI(MPF_Glass):
@@ -571,6 +582,15 @@ class HOLIGlass(object):
         K = K.data.numpy()[0]
         return K, dK
 
+    def K(self, theta):
+        theta = make_arr_torch(theta, 'theta', req_grad=True)
+        #theta = torch_double_var(theta_npy_arr, True)
+        # Assign values
+        dE = self.get_dE(theta)
+        Knd = torch.exp(-0.5 * dE)
+        K = Knd.sum() 
+        return K
+
     def learn(self, unflatten=True, disp=False):
         """
         Returns parameters estimated through MPF
@@ -594,16 +614,42 @@ class HOLIGlass(object):
         else:
             return estimate
 
+    def learn_torch(self, unflatten=True, tol=1E-5, max_iter=1000):
+        logger.info('Start fitting parameters...')
+        t0 = time.time()
+
+        theta = Variable(torch.zeros(self.num_params).double(), requires_grad=True)
+
+        optimizer = optim.LBFGS([theta], max_iter=max_iter, tolerance_grad=tol)
+
+        def f():
+            optimizer.zero_grad()
+            loss = self.K(theta)
+            loss.backward()
+            return loss
+
+        optimizer.step(f)
+        flat_grad = optimizer._gather_flat_grad()
+        abs_grad_sum = flat_grad.abs().sum()
+        if abs_grad_sum < tol:
+            logger.info(f'Optimization converged')
+        else:
+            logger.info(f'Optimization did not converge with abs_grad_sum={abs_grad_sum}')
+
+        logger.info('Fitting took {:.4f}s'.format(time.time() - t0))
+        if unflatten:
+            return self.unflatten_params(theta)
+        else:
+            return theta
+
 if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
     datefmt='%d-%m-%Y:%H:%M:%S',
     level=logging.INFO)
-    D = 10**2
-    N = 10
+    D = 9**2
+    N = 100
 
     X = np.random.randint(2, size=(N, D)) * 2 - 1
-    #X[:, 0] = -1
-    #X[:, 3] = -1
 
     M1 = np.ones((2,2))
     M2 = np.array(
@@ -615,9 +661,6 @@ if __name__ == '__main__':
             )
 
     holi = HOLIGlass(X, params=['J_glass', 'j_1'])
-    #holi = HOLIGlass(X, M=[M1, M2])
-    params = (holi.get_random_params(req_grad=True))
-    theta = holi.flatten_params(params)
-    print(theta)
-    print(holi.learn())
+    (holi.learn())
+    (holi.learn_torch())
 
