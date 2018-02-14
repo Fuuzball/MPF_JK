@@ -38,9 +38,9 @@ def is_Variable(arr):
     return isinstance(arr, Variable) 
 
 
-def make_arr_torch(arr, arr_name):
+def make_arr_torch(arr, arr_name, req_grad=False):
     if is_ndarray(arr):
-        return torch_double_var(arr, False)
+        return torch_double_var(arr, grad=req_grad)
     elif is_Variable(arr):
         return arr.double()
     else:
@@ -306,9 +306,16 @@ class HOLIGlass(object):
         # Default to fourth order interaction (JK model)
         if M is None:
             M = [
-                    torch_double_var(np.ones((2, 2)), False)
+                    np.ones((2, 2))
                     ]
         self.M = M
+
+        # Make 2nd order correlations for local ising model
+        self.corr_mats = OrderedDict()
+        for name in params:
+            if 'j_' in name:
+                k = int(name[2:])
+                self.corr_mats[name] = self.get_corr_mat(k)
 
         # Define param shape
         self.param_shape = self.get_param_shape(params)
@@ -320,21 +327,15 @@ class HOLIGlass(object):
                 len *= d
             self.num_params += len
 
-        if False:
-            for m in self.M:
-                m_h, m_w = m.shape
-                k_h = H - m_h + 1
-                k_w = W - m_w + 1
-                self.k_dims.append((k_h, k_w))
-                self.num_params += k_h * k_w
-
     def get_param_shape(self, params):
         param_shape = OrderedDict()
         for name in params:
             if name == 'J_glass':
-                param_shape['J_glass'] = (self.D, self.D)
+                param_shape[name] = (self.D, self.D)
             elif name == 'b':
-                param_shape['b'] = (self.D, )
+                param_shape[name] = (self.D, )
+            elif 'j_' in name:
+                param_shape[name] = (1, )
             else:
                 logger.error('Parameter name {} is not recognized'.format_map(name))
                 sys.exit()
@@ -381,23 +382,6 @@ class HOLIGlass(object):
 
         return params
 
-        D = self.D
-        J = np.random.normal(size=(D, D))
-        J += J.T
-        np.fill_diagonal(J, 0)
-        J = torch_double_var(J, req_grad)
-
-        b = np.random.normal(size=D)
-        b = torch_double_var(b, req_grad)
-
-        K = []
-        for k_hw in self.k_dims:
-            K.append(
-                torch_double_var(np.random.normal(size=k_hw), req_grad)
-                    )
-
-        return J, b, K
-
     def flatten_params(self, params):
         logger.debug('Calling function flatten_params')
         #logger.debug('-'*20 + 'J' + '-'*20 + '\n{}'.format(J))
@@ -415,43 +399,6 @@ class HOLIGlass(object):
             params_list.append(param.view(-1))
 
         return torch.cat(params_list)
-        
-        
-
-
-
-
-        return len(params)
-
-
-
-        # Initialize empty theta
-        theta = Variable(torch.zeros(self.num_params))
-
-        # Make all arrays torch variables and assert their shape to be correct
-        J = make_arr_torch(J, 'J')
-        b = make_arr_torch(b, 'b')
-
-        D = self.D
-
-        self.assert_param_shape(J, 'J', (D, D))
-        self.assert_param_shape(b, 'b', (D, ))
-
-        theta[:D**2] = J.view(-1)
-        theta[D**2: D**2 + D] = b
-
-        start = D**2 + D
-        for n, k in enumerate(K):
-            k_h, k_w = self.k_dims[n]
-            name = 'k_{}'.format(n)
-            K[n] = make_arr_torch(k, name)
-            self.assert_param_shape(K[n], name, (k_h, k_w))
-
-            end = start + k_h * k_w
-            theta[start:end] = K[n].view(-1)
-            start = end
-
-        return theta
 
     def unflatten_params(self, theta):
         theta = make_arr_torch(theta, 'theta')
@@ -486,7 +433,34 @@ class HOLIGlass(object):
             start = end
         return J, b, K
 
-    def dE_glass(self, J, b):
+    def get_W(self, J):
+        a = torch.Tensor([[4,1,0,1,4]])
+        r2 = a + a.t()
+        W = torch.zeros((5,5))
+        W[r2 == 1] = J[0]
+        W[r2 == 2] = J[1]
+        W[r2 == 4] = J[2]
+        W[r2 == 5] = J[3]
+        return Variable(W.double(), requires_grad=False)
+
+    def get_corr_mat(self, k):
+        J = [0, 0, 0, 0]
+        J[k - 1] = 1
+        W = self.get_W(J)
+        H = F.conv2d( self.X_2d[:, None, :, :], W[None, None, :, :], padding=2)
+        H = H.squeeze(1) # Get rid of the channel dimension
+        return H
+        dE_2d = - 2 * self.X_2d * H
+        return dE_2d.view(self.N, -1)
+
+    def dE_local_ising(self, J):
+        W = self.get_W(J)
+        H = F.conv2d( self.X_2d[:, None, :, :], W[None, None, :, :], padding=2)
+        H = H.squeeze(1) # Get rid of the channel dimension
+        dE_2d = - 2 * self.X_2d * H
+        return dE_2d.view(self.N, -1)
+
+    def dE_glass(self, J):
         logger.debug('Calling dE_glass')
         if not torch.equal(J, J.t()):
             logger.debug('J is not symmetric')
@@ -495,8 +469,11 @@ class HOLIGlass(object):
         D = self.D
         mask = Variable((torch.ones((D,D)) - torch.eye(D)).double(), requires_grad=False)
         J_sym = 0.5 * (J.t() + J) * mask
-        dE = 2 * self.X * (self.X.mm(J_sym)) - 2 * self.X * b[None, :]
+        dE = 2 * self.X * (self.X.mm(J_sym))
         return dE
+
+    def dE_bias(self, b):
+        return -2 * self.X * b[None, :]
 
     def dE_HOLI(self, K, M):
         logger.debug('Calling dE_HOLI')
@@ -549,24 +526,38 @@ class HOLIGlass(object):
 
     def get_dE(self, theta):
         logger.debug('Calling get_dE')
-        logger.debug('-'*20 + 'theta' + '-'*20 + '\n{}'.format(theta))
-        #J, b, K = self.unflatten_params(theta)
         params = self.unflatten_params(theta)
+        logger.debug('-'*20 + 'params' + '-'*20 + '\n{}'.format(params))
 
-        #TODO: Impliment case when b is not a param
+        dE = 0
+
+        # Energy due to bias
+        if 'b' in params:
+            b = params['b']
+            dE += self.dE_bias(b)
+
+        # Energy due to ising glass
         if 'J_glass' in params:
             J = params['J_glass']
-            b = params['b']
-            dE = self.dE_glass(J, b)
+            dE += self.dE_glass(J)
 
+        # Energy due to fixed, local, second interaction
+        for p in params:
+            if 'j_' in p:
+                C = self.corr_mats[p]
+                j = params[p]
+                dE += - 2 * j * self.X * C.view(self.N, -1)
+
+        # Energy due to higher order local interaction
         k_params = [params[p] for p in params if 'k_' in p]
-
         for k, m in zip(k_params, self.M):
             dE += self.dE_HOLI(k, m).view(self.N, -1)
+
         return dE
 
-    def K_dK(self, theta_npy_arr):
-        theta = torch_double_var(theta_npy_arr, True)
+    def K_dK(self, theta):
+        theta = make_arr_torch(theta, 'theta', req_grad=True)
+        #theta = torch_double_var(theta_npy_arr, True)
         # Assign values
         dE = self.get_dE(theta)
         Knd = torch.exp(-0.5 * dE)
@@ -580,7 +571,7 @@ class HOLIGlass(object):
         K = K.data.numpy()[0]
         return K, dK
 
-    def learn(self, unflatten=True):
+    def learn(self, unflatten=True, disp=False):
         """
         Returns parameters estimated through MPF
         """
@@ -593,10 +584,7 @@ class HOLIGlass(object):
         theta = Variable(torch.zeros(self.num_params))
         logger.debug('-'*20 + 'theta' + '-'*20 + '\n{}'.format(theta))
 
-        def cb_func(params):
-            logger.info(params)
-
-        min_out = optimize.fmin_l_bfgs_b(self.K_dK, theta, disp=True)
+        min_out = optimize.fmin_l_bfgs_b(self.K_dK, theta, disp=disp)
         estimate = min_out[0] 
 
         logger.info('Fitting took {:.4f}s'.format(time.time() - t0))
@@ -610,10 +598,12 @@ if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
     datefmt='%d-%m-%Y:%H:%M:%S',
     level=logging.INFO)
-    D = 9
-    N = 1000
+    D = 10**2
+    N = 10
 
     X = np.random.randint(2, size=(N, D)) * 2 - 1
+    #X[:, 0] = -1
+    #X[:, 3] = -1
 
     M1 = np.ones((2,2))
     M2 = np.array(
@@ -624,6 +614,10 @@ if __name__ == '__main__':
                 ]
             )
 
-    holi = HOLIGlass(X, M=[M1, M2])
+    holi = HOLIGlass(X, params=['J_glass', 'j_1'])
+    #holi = HOLIGlass(X, M=[M1, M2])
+    params = (holi.get_random_params(req_grad=True))
+    theta = holi.flatten_params(params)
+    print(theta)
     print(holi.learn())
-    
+
