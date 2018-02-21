@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pylab as plt
 import logging
 import pickle
+from torch import optim
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level = logging.INFO)
@@ -13,7 +14,7 @@ X = mnist.data
 
 N_X = X.shape[0]
 
-n_samples = 1000
+n_samples = 1
 
 rng = np.random.RandomState(seed=42)
 rand_idx = rng.choice(np.arange(N_X), n_samples, replace=False)
@@ -23,7 +24,7 @@ print(X_sample.shape)
 
 estimator = HOLIGlass(X_sample, params=['j_1', 'b'])
 print(estimator.num_params)
-params = estimator.learn(lr=.0010, max_iter=2)
-params = estimator.learn(lr=10, max_iter=2)
+params = estimator.learn(lr=1, max_iter=100)
+print(params)
 pickle.dump(params, open('params.p', 'wb'))
 
