@@ -91,6 +91,9 @@ class HOLIGlass(object):
                 len *= d
             self.num_params += len
 
+        if self.num_params > self.N:
+            logger.warning(f'The number of parameters {self.num_params} is greater than the size of training set {self.N}')
+
     def get_param_shape(self, params):
         param_shape = OrderedDict()
         for name in params:
@@ -312,7 +315,7 @@ class HOLIGlass(object):
         # Assign values
         dE = self.get_dE(theta)
         Knd = torch.exp(-0.5 * dE)
-        K = Knd.mean() 
+        K = Knd.sum() 
         return K
 
     def learn_sgd(self, unflatten=True):
@@ -328,13 +331,15 @@ class HOLIGlass(object):
         else:
             return theta
         
-    def learn(self, unflatten=True, **kwargs):
+    def learn(self, unflatten=True, theta0=None, params=None):
         logger.info('Start fitting parameters...')
         t0 = time.time()
 
-        theta = Variable(torch.zeros(self.num_params).double(), requires_grad=True)
+        if theta0 is not None:
+            theta = theta0
+        else:
+            theta = Variable(torch.zeros(self.num_params).double(), requires_grad=True)
 
-        optimizer = LBFGS([theta], **kwargs)
 
         def f():
             optimizer.zero_grad()
@@ -342,9 +347,14 @@ class HOLIGlass(object):
             loss.backward()
             return loss
 
-        optimizer.step(f)
-        flat_grad = optimizer._gather_flat_grad()
-        abs_grad_sum = flat_grad.abs().sum()
+        if params is None:
+            logger.info('Optimizing with default parameters')
+            optimizer = LBFGS([theta])
+            optimizer.step(f)
+        for param in params:
+            logger.info('Optimizing with parameters: {}'.format(param))
+            optimizer = LBFGS([theta], **param)
+            optimizer.step(f)
 
         logger.info('Fitting took {:.4f}s'.format(time.time() - t0))
         if unflatten:

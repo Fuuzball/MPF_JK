@@ -36,7 +36,8 @@ class LBFGS(Optimizer):
 
     def __init__(self, params, lr=1, max_iter=20, max_eval=None,
                  tolerance_grad=1e-5, tolerance_change=1e-9, history_size=100,
-                 line_search_fn=None):
+                 line_search_fn=None, call_back=None):
+        self.call_back = call_back
         if max_eval is None:
             max_eval = max_iter * 5 // 4
         defaults = dict(lr=lr, max_iter=max_iter, max_eval=max_eval,
@@ -226,6 +227,17 @@ class LBFGS(Optimizer):
             ############################################################
             # check conditions
             ############################################################
+            if self.call_back:
+                properties = {}
+                properties['n_iter'] = n_iter
+                properties['current_evals'] = current_evals
+                properties['abs_grad_sum'] = abs_grad_sum
+                properties['gtd'] = gtd
+                properties['step_size'] = d.mul(t).abs_().sum()
+                properties['delta_loss'] = abs(loss - prev_loss)
+                properties['loss'] = loss
+                self.call_back(properties)
+
             if n_iter == max_iter:
                 logger.info(f'Exit because max_iter ({max_iter}) reached')
                 logger.info(f'Final abs_grad_sum : {abs_grad_sum}')
@@ -236,7 +248,7 @@ class LBFGS(Optimizer):
                 break
 
             if abs_grad_sum <= tolerance_grad:
-                logger.info(f'Exit because tolerance_grad ({tolerance_grad}) reached after {n_iter} iterations')
+                logger.info(f'Exit because tolerance_grad ({tolerance_grad}) reached by *abs_grad_sum* after {n_iter} iterations')
                 break
 
             if gtd > -tolerance_change:
@@ -244,11 +256,11 @@ class LBFGS(Optimizer):
                 break
 
             if d.mul(t).abs_().sum() <= tolerance_change:
-                logger.info(f'Exit because tolerance_change ({tolerance_change}) reached by d.mul(t).abs_().sum() after {n_iter} iterations')
+                logger.info(f'Exit because tolerance_change ({tolerance_change}) reached by *magnitude of step size* after {n_iter} iterations')
                 break
 
             if abs(loss - prev_loss) < tolerance_change:
-                logger.info(f'Exit because tolerance_change ({tolerance_change}) reached by abs(loss - prev_loss) after {n_iter} iterations')
+                logger.info(f'Exit because tolerance_change ({tolerance_change}) reached by *magnitude of change in loss*  after {n_iter} iterations')
                 break
 
         state['d'] = d
