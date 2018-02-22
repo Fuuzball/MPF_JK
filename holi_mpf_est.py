@@ -1,5 +1,6 @@
 import torch
 from torch import optim
+from torch_lbfgs import LBFGS
 from torch.autograd import Variable
 from torch.nn import functional as F
 import numpy as np
@@ -43,6 +44,7 @@ def make_arr_torch(arr, arr_name, req_grad=False):
     else:
         logger.error(arr_name + 'needs to be either np array or torch variable')
         sys.exit()
+
 
 class HOLIGlass(object):
 
@@ -162,7 +164,7 @@ class HOLIGlass(object):
 
         return torch.cat(params_list)
 
-    def unflatten_params(self, theta):
+    def unflatten_params(self, theta, numpy=False):
         theta = make_arr_torch(theta, 'theta')
         start = 0
         params = {}
@@ -173,28 +175,15 @@ class HOLIGlass(object):
                 len *= d
             end = start + len
 
-            params[f_name] = theta[start:end].view(shape)
+            param = theta[start:end].view(shape)
+            if numpy:
+                param = param.data.numpy()
+
+            params[f_name] = param
             start = end
 
         return params
             
-
-
-        D = self.D
-        theta = make_arr_torch(theta, 'theta')
-        self.assert_param_shape(theta, 'theta', (self.num_params, ))
-
-        J = theta[0:D**2].view((D, D))
-        b = theta[D**2:D**2 + D]
-
-        start = D**2 + D
-        K = []
-        for (k_h, k_w) in self.k_dims:
-            end = start + k_h * k_w
-            K.append(theta[start:end].view((k_h, k_w)))
-            start = end
-        return J, b, K
-
     def get_W(self, J):
         a = torch.Tensor([[4,1,0,1,4]])
         r2 = a + a.t()
@@ -323,16 +312,29 @@ class HOLIGlass(object):
         # Assign values
         dE = self.get_dE(theta)
         Knd = torch.exp(-0.5 * dE)
-        K = Knd.sum() 
+        K = Knd.mean() 
         return K
 
-    def learn(self, unflatten=True, tol=1E-5, max_iter=1000, lr=.1):
+    def learn_sgd(self, unflatten=True):
+        theta = Variable(torch.zeros(self.num_params).double(), requires_grad=True)
+        optimizer = optim.SGD([theta], lr =.0001)
+
+        for _ in range(10):
+            self.K(theta).backward()
+            optimizer.step()
+
+        if unflatten:
+            return self.unflatten_params(theta)
+        else:
+            return theta
+        
+    def learn(self, unflatten=True, **kwargs):
         logger.info('Start fitting parameters...')
         t0 = time.time()
 
         theta = Variable(torch.zeros(self.num_params).double(), requires_grad=True)
 
-        optimizer = optim.LBFGS([theta], lr=.1, max_iter=max_iter, tolerance_grad=tol)
+        optimizer = LBFGS([theta], **kwargs)
 
         def f():
             optimizer.zero_grad()
@@ -343,22 +345,35 @@ class HOLIGlass(object):
         optimizer.step(f)
         flat_grad = optimizer._gather_flat_grad()
         abs_grad_sum = flat_grad.abs().sum()
-        if abs_grad_sum < tol:
-            logger.info(f'Optimization converged')
-        else:
-            logger.info(f'Optimization did not converge with abs_grad_sum={abs_grad_sum}')
 
         logger.info('Fitting took {:.4f}s'.format(time.time() - t0))
         if unflatten:
-            return self.unflatten_params(theta)
+            return self.unflatten_params(theta, True)
         else:
             return theta
+
+    def learn_scipy(self):
+        theta = Variable(torch.zeros(self.num_params).double(), requires_grad=True)
+
+        def f(theta):
+            theta = torch_double_var(theta, True)
+            loss = self.K(theta)
+            loss.backward()
+            return loss.data.numpy(), theta.grad.data.numpy()
+
+        min_out = optimize.fmin_l_bfgs_b(f, theta)
+        estimate = min_out[0]
+
+        return self.unflatten_params(estimate, True)
+
+
 
 if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
     datefmt='%d-%m-%Y:%H:%M:%S',
     level=logging.INFO)
-    D = 8**2
+    logging.getLogger('torch_lbfgs.py').setLevel(logging.DEBUG)
+    D = 4**2
     N = 100
 
     X = np.random.randint(2, size=(N, D)) * 2 - 1
@@ -373,4 +388,5 @@ if __name__ == '__main__':
             )
 
     holi = HOLIGlass(X, params=['j_1', 'b'])
-    params = holi.learn(max_iter=1000)
+    params = holi.learn(max_iter=1000 )
+    print(params)
