@@ -24,7 +24,7 @@ def get_rand_J(D):
     return J
 
 
-def torch_double_var(npy_arry, grad):
+def torch_double_var(npy_arry, grad=False):
     return Variable(torch.from_numpy(npy_arry).double(), requires_grad=grad)
 
 
@@ -42,7 +42,7 @@ def make_arr_torch(arr, arr_name, req_grad=False):
     elif is_Variable(arr):
         return arr.double()
     else:
-        logger.error(arr_name + 'needs to be either np array or torch variable')
+        logger.error(arr_name + ' needs to be either np array or torch variable')
         sys.exit()
 
 
@@ -51,6 +51,7 @@ class HOLIGlass(object):
     def __init__(self, X, shape_2d=None, M=None, params=['J_glass', 'b']):
         logger.info('Initializing HOLIGlass...')
         self.N, self.D = X.shape
+        self.corr_mats = OrderedDict()
 
         #Convert to float
         #self.X = Variable(torch.from_numpy(X).type(torch.DoubleTensor), requires_grad=False)
@@ -75,7 +76,6 @@ class HOLIGlass(object):
         self.M = M
 
         # Make 2nd order correlations for local ising model
-        self.corr_mats = OrderedDict()
         for name in params:
             if 'j_' in name:
                 k = int(name[2:])
@@ -123,6 +123,7 @@ class HOLIGlass(object):
     def X(self, new_X):
         self._X = make_arr_torch(new_X, 'X')
         self._X_2d =  self._X.view((self.N, self.H, self.W))
+        self.update_corr_mat()
 
     @property
     def X_2d(self):
@@ -187,6 +188,7 @@ class HOLIGlass(object):
 
         return params
             
+    ## NOT BEING USED ##
     def get_W(self, J):
         a = torch.Tensor([[4,1,0,1,4]])
         r2 = a + a.t()
@@ -203,10 +205,14 @@ class HOLIGlass(object):
         W = self.get_W(J)
         H = F.conv2d( self.X_2d[:, None, :, :], W[None, None, :, :], padding=2)
         H = H.squeeze(1) # Get rid of the channel dimension
-        return H
-        dE_2d = - 2 * self.X_2d * H
-        return dE_2d.view(self.N, -1)
+        return self.X_2d * H
 
+    def update_corr_mat(self):
+        for name in self.corr_mats:
+            k = int(name[2:])
+            self.corr_mats[name] = self.get_corr_mat(k)
+
+    ## NOT BEING USED ##
     def dE_local_ising(self, J):
         W = self.get_W(J)
         H = F.conv2d( self.X_2d[:, None, :, :], W[None, None, :, :], padding=2)
@@ -300,7 +306,7 @@ class HOLIGlass(object):
             if 'j_' in p:
                 C = self.corr_mats[p]
                 j = params[p]
-                dE += - 2 * j * self.X * C.view(self.N, -1)
+                dE += j * C.view(self.N, -1)
 
         # Energy due to higher order local interaction
         k_params = [params[p] for p in params if 'k_' in p]
@@ -383,20 +389,22 @@ if __name__ == '__main__':
     datefmt='%d-%m-%Y:%H:%M:%S',
     level=logging.INFO)
     logging.getLogger('torch_lbfgs.py').setLevel(logging.DEBUG)
-    D = 4**2
-    N = 100
+    D = 10**2
+    N = 1
 
-    X = np.random.randint(2, size=(N, D)) * 2 - 1
+    rng = np.random.RandomState(seed=10)
 
-    M1 = np.ones((2,2))
-    M2 = np.array(
-            [
-                [1, 0, 1],
-                [0, 1, 0],
-                [1, 0, 1]
-                ]
-            )
-
-    holi = HOLIGlass(X, params=['j_1', 'b'])
-    params = holi.learn(max_iter=1000 )
+    X = rng.randint(2, size=(N, D)) * 2 - 1
+    estimator = HOLIGlass(X, params=['j_1'], M=[])
+    params = estimator.get_random_params()
+    params['j_1'] = torch_double_var(np.array([20]))
     print(params)
+    theta = estimator.flatten_params(params)
+
+    sampler = GibbsSampler(D, theta, estimator)
+    N = 30
+    burn_in = 10
+    thin = 10
+    X = sampler.sample_X(N, burn_in, thin)
+    sampler.plot_sample()
+    plt.show()

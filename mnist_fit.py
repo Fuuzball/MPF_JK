@@ -14,7 +14,7 @@ X = mnist.data
 
 N_X = X.shape[0]
 
-n_samples = 1000
+n_samples = 10000
 
 M0 = np.ones((2, 2))
 M1 = np.ones((2, 2))
@@ -36,17 +36,18 @@ else:
     X_sample = X
 print(X_sample.shape)
 
-estimator = HOLIGlass(X_sample, params=['j_1', 'b'], M=M)
+estimator = HOLIGlass(X_sample, params=['j_1', 'j_2', 'j_3', 'j_4', 'b'], M=M)
 
 def f(prop):
     print (prop['n_iter'], prop['abs_grad_sum'], prop['loss'])
 
 est_params_lr_5 = {
-        'lr' : 1,
+        'lr' : .1,
         'max_iter' : 50,
         'tolerance_grad' : 1,
         'tolerance_change' : 1E-5,
-        'call_back' : f
+        'call_back' : f,
+        'history_size' : 10
         }
 
 est_params = {
@@ -63,12 +64,16 @@ params = estimator.learn(params=est_params_list)
 #print(params)
 plt.subplot(221)
 plt.imshow(params['k_0'])
+plt.colorbar()
 plt.subplot(222)
 plt.imshow(params['k_1'])
+plt.colorbar()
 plt.subplot(223)
 plt.imshow(params['k_2'])
+plt.colorbar()
 plt.subplot(224)
 plt.imshow(params['k_3'])
+plt.colorbar()
 print(params)
 plt.show()
 #pickle.dump(params, open('params.p', 'wb'))
