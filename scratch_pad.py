@@ -1,5 +1,4 @@
-import torch
-from torch.autograd import Variable
+import random
 
-J = Variable(torch.Tensor([1, 2, 3]))
-print(J[0].shape)
+for _ in range(10):
+    print(random.randint(0, 2))

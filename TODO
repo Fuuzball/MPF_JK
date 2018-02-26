@@ -1,6 +1,8 @@
--Write sampler for arbitrary HOLI (higher order local interaction) 
+VWrite sampler for arbitrary HOLI (higher order local interaction) 
 --Check understanding of SLMC, seems unecessary, why find J_eff, etc.? Do we start from the gibbs samples instead of anew?
 V Impliment torch gibbs sampler
 - Impliment torch SLMC
-- Impliment MPF estimator with multiple interactions 
+V Impliment MPF estimator with multiple interactions 
 - Refactor MPF esitmators to not take X in initialization
+- Make hopfield object 
+-- Get results for hopfield on random data

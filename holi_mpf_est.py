@@ -65,6 +65,7 @@ class HOLIGlass(object):
             H, W = shape
         self.H = H
         self.W = W
+        self.shape_2d = (H, W)
 
         self.X = X
 
@@ -122,6 +123,8 @@ class HOLIGlass(object):
     @X.setter
     def X(self, new_X):
         self._X = make_arr_torch(new_X, 'X')
+        if len(self._X.shape) == 1:
+            self._X = self._X[None, :]
         self._X_2d =  self._X.view((self.N, self.H, self.W))
         self.update_corr_mat()
 
@@ -188,7 +191,7 @@ class HOLIGlass(object):
 
         return params
             
-    ## NOT BEING USED ##
+    ## NOT BING USED ##
     def get_W(self, J):
         a = torch.Tensor([[4,1,0,1,4]])
         r2 = a + a.t()
