@@ -72,8 +72,6 @@ class GibbsSampler(object):
                 x_2d = (self.estimator.X_2d.data.numpy())
                 i_x = i // self.D**.5
                 i_y = i % self.D**.5
-                print(x_2d)
-                print(i_x, i_y, dE)
                 x[i] *= -1
                 self.estimator.X = x[None, :]
             
@@ -97,7 +95,6 @@ class GibbsSampler(object):
 
         if fname is None:
             logger.info('Showing plot...')
-            plt.show()
         else:
             plt.imsave(fname, X_stacked, format='png', cmap='Greys')
 
@@ -106,27 +103,24 @@ if __name__ == '__main__':
     datefmt='%d-%m-%Y:%H:%M:%S',
     level=logging.INFO)
     logging.getLogger('torch_lbfgs.py').setLevel(logging.DEBUG)
-    D = 3**2
-    N = 1
+    D = 4**2
 
     rng = np.random.RandomState(seed=10)
 
-    X = rng.randint(2, size=(N, D)) * 2 - 1
-    estimator = HOLIGlass(X, params=['b'], M=[])
+    X = rng.randint(2, size=(1, D)) * 2 - 1
+    params = ['J_glass', 'b']
+    estimator = HOLIGlass(X, params=params, M=[])
     params = estimator.get_random_params()
-    params['b'] = torch_double_var(
-            np.array(
-                [[100, -100, 100],
-                [-100, 100, 100],
-                [100, 100, -100]]
-                ).reshape(-1)
-            )
     theta = estimator.flatten_params(params)
 
     sampler = GibbsSampler(D, theta, estimator)
-    N = 1
-    burn_in = 100
-    thin = 100
+    N = 2000
+    burn_in = 1000
+    thin = 200
     X = sampler.sample_X(N, burn_in, thin)
-    sampler.plot_sample()
+    estimator = HOLIGlass(X, params=params, M=[])
+    params_est = estimator.learn()
+    plt.imshow(params['J_glass'].data.numpy())
+    plt.figure()
+    plt.imshow(params_est['J_glass'])
     plt.show()

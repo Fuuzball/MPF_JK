@@ -357,10 +357,11 @@ class HOLIGlass(object):
             logger.info('Optimizing with default parameters')
             optimizer = LBFGS([theta])
             optimizer.step(f)
-        for param in params:
-            logger.info('Optimizing with parameters: {}'.format(param))
-            optimizer = LBFGS([theta], **param)
-            optimizer.step(f)
+        else:
+            for param in params:
+                logger.info('Optimizing with parameters: {}'.format(param))
+                optimizer = LBFGS([theta], **param)
+                optimizer.step(f)
 
         logger.info('Fitting took {:.4f}s'.format(time.time() - t0))
         if unflatten:
