@@ -1,4 +1,5 @@
-import random
+import numpy as np
 
-for _ in range(10):
-    print(random.randint(0, 2))
+D_list = np.arange(10, 110, 10)
+N_list = np.arange(10, 160, 10)
+print(np.array(np.meshgrid(D_list, N_list)).T)

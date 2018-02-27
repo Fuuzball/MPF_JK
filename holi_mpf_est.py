@@ -53,22 +53,6 @@ class HOLIGlass(object):
         self.N, self.D = X.shape
         self.corr_mats = OrderedDict()
 
-        #Convert to float
-        #self.X = Variable(torch.from_numpy(X).type(torch.DoubleTensor), requires_grad=False)
-        #self.X = make_arr_torch(X, 'X')
-
-        # Default shape to square
-        if shape_2d == None:
-            W = int(np.sqrt(self.D))
-            H = int(self.D / W)
-        else:
-            H, W = shape
-        self.H = H
-        self.W = W
-        self.shape_2d = (H, W)
-
-        self.X = X
-
         # Default to fourth order interaction (JK model)
         if M is None:
             M = [
@@ -76,11 +60,35 @@ class HOLIGlass(object):
                     ]
         self.M = M
 
-        # Make 2nd order correlations for local ising model
+        self.need_2d = False
+
         for name in params:
             if 'j_' in name:
-                k = int(name[2:])
-                self.corr_mats[name] = self.get_corr_mat(k)
+                self.need_2d = True
+
+        if M != []:
+            self.need_2d = True
+
+        if self.need_2d:
+            # Default shape to square
+            if shape_2d == None:
+                W = int(np.sqrt(self.D))
+                H = int(self.D / W)
+            else:
+                H, W = shape
+            self.H = H
+            self.W = W
+            self.shape_2d = (H, W)
+
+        self.X = X
+
+
+        if self.need_2d:
+            # Make 2nd order correlations for local ising model
+            for name in params:
+                if 'j_' in name:
+                    k = int(name[2:])
+                    self.corr_mats[name] = self.get_corr_mat(k)
 
         # Define param shape
         self.param_shape = self.get_param_shape(params)
@@ -125,8 +133,10 @@ class HOLIGlass(object):
         self._X = make_arr_torch(new_X, 'X')
         if len(self._X.shape) == 1:
             self._X = self._X[None, :]
-        self._X_2d =  self._X.view((self.N, self.H, self.W))
-        self.update_corr_mat()
+
+        if self.need_2d:
+            self._X_2d =  self._X.view((self.N, self.H, self.W))
+            self.update_corr_mat()
 
     @property
     def X_2d(self):
