@@ -31,27 +31,23 @@ def torch_double_var(npy_arry, grad=False):
 def is_ndarray(arr):
     return isinstance(arr, np.ndarray) 
 
-
 def is_Variable(arr):
     return isinstance(arr, Variable) 
 
 
-def make_arr_torch(arr, arr_name, req_grad=False):
-    if is_ndarray(arr):
-        return torch_double_var(arr, grad=req_grad)
-    elif is_Variable(arr):
-        return arr.double()
-    else:
-        logger.error(arr_name + ' needs to be either np array or torch variable')
-        sys.exit()
-
 
 class HOLIGlass(object):
 
-    def __init__(self, X, shape_2d=None, M=None, params=['J_glass', 'b']):
+    def __init__(self, X, shape_2d=None, M=None, params=['J_glass', 'b'], use_cuda=True):
         logger.info('Initializing HOLIGlass...')
         self.N, self.D = X.shape
         self.corr_mats = OrderedDict()
+        self.USE_CUDA = use_cuda
+        if use_cuda:
+            logger.info('Using CUDA')
+            torch.cuda.init()
+        else:
+            logger.info('Using CPU')
 
         # Default to fourth order interaction (JK model)
         if M is None:
@@ -130,7 +126,7 @@ class HOLIGlass(object):
 
     @X.setter
     def X(self, new_X):
-        self._X = make_arr_torch(new_X, 'X')
+        self._X = self.to_double_var(new_X, 'X')
         if len(self._X.shape) == 1:
             self._X = self._X[None, :]
 
@@ -142,6 +138,23 @@ class HOLIGlass(object):
     def X_2d(self):
         #return self.X.view((self.N, self.H, self.W))
         return self._X_2d
+
+    def to_double_var(self, X, arr_name='', requires_grad=False):
+        if self.USE_CUDA:
+            d_type = torch.cuda.DoubleTensor
+        else:
+            d_type = torch.DoubleTensor
+
+        if is_ndarray(X):
+            return Variable(torch.from_numpy(X).type(d_type), requires_grad=requires_grad)
+        elif is_Variable(X):
+            return X.type(d_type)
+        else:
+            try:
+                return Variable(X.type(d_type), requires_grad=requires_grad)
+            except:
+                logger.error(f'Variable {arr_name} needs to be either np array or torch variable instead of {type(X)}')
+                sys.exit()
 
     def assert_param_shape(self, param, name, shape):
         if not param.shape == shape:
@@ -159,7 +172,8 @@ class HOLIGlass(object):
             if p_name == 'J_glass':
                 param += param.T
                 np.fill_diagonal(param, 0)
-            params[p_name] = torch_double_var(param, req_grad)
+            #params[p_name] = torch_double_var(param, req_grad)
+            params[p_name] = self.to_double_var(param, p_name, req_grad)
 
         return params
 
@@ -182,7 +196,7 @@ class HOLIGlass(object):
         return torch.cat(params_list)
 
     def unflatten_params(self, theta, numpy=False):
-        theta = make_arr_torch(theta, 'theta')
+        theta = self.to_double_var(theta, 'theta')
         start = 0
         params = {}
         for f_name in self.param_shape:
@@ -194,7 +208,10 @@ class HOLIGlass(object):
 
             param = theta[start:end].view(shape)
             if numpy:
-                param = param.data.numpy()
+                if self.USE_CUDA:
+                    param = param.data.cpu().numpy()
+                else:
+                    param = param.data.numpy()
 
             params[f_name] = param
             start = end
@@ -240,7 +257,9 @@ class HOLIGlass(object):
 
         # Enforce the matrix to be symmetric and have vanishing diagonals
         D = self.D
-        mask = Variable((torch.ones((D,D)) - torch.eye(D)).double(), requires_grad=False)
+        #mask = Variable((torch.ones((D,D)) - torch.eye(D)).double(), requires_grad=False)
+        mask = torch.ones((D, D)) - torch.eye(D)
+        mask = self.to_double_var(mask, 'mask')
         J_sym = 0.5 * (J.t() + J) * mask
         dE = 2 * self.X * (self.X.mm(J_sym))
         return dE
@@ -271,8 +290,10 @@ class HOLIGlass(object):
         M_flipped = M[::-1, ::-1].copy()
 
         # Turn M into pytorch Variable
-        M = torch_double_var(M, False)
-        M_flipped = torch_double_var(M_flipped, False)
+        #M = torch_double_var(M, False)
+        M = self.to_double_var(M, 'M', False)
+        #M_flipped = torch_double_var(M_flipped, False)
+        M_flipped = self.to_double_var(M, 'M', False)
 
         # Make convolution to count number of spin+ - spin-
         XM = F.conv2d(
@@ -329,7 +350,7 @@ class HOLIGlass(object):
         return dE
 
     def K(self, theta):
-        theta = make_arr_torch(theta, 'theta', req_grad=True)
+        theta = self.to_double_var(theta, 'theta', requires_grad=True)
         #theta = torch_double_var(theta_npy_arr, True)
         # Assign values
         dE = self.get_dE(theta)
@@ -387,6 +408,7 @@ class HOLIGlass(object):
 
         def f(theta):
             theta = torch_double_var(theta, True)
+            theta = self.to_double_var(theta, 'theta', True)
             loss = self.K(theta)
             loss.backward()
             return loss.data.numpy(), theta.grad.data.numpy()
@@ -404,21 +426,13 @@ if __name__ == '__main__':
     level=logging.INFO)
     logging.getLogger('torch_lbfgs.py').setLevel(logging.DEBUG)
     D = 10**2
-    N = 1
+    N = int(1E5)
 
     rng = np.random.RandomState(seed=10)
 
     X = rng.randint(2, size=(N, D)) * 2 - 1
-    estimator = HOLIGlass(X, params=['j_1'], M=[])
-    params = estimator.get_random_params()
-    params['j_1'] = torch_double_var(np.array([20]))
-    print(params)
-    theta = estimator.flatten_params(params)
-
-    sampler = GibbsSampler(D, theta, estimator)
-    N = 30
-    burn_in = 10
-    thin = 10
-    X = sampler.sample_X(N, burn_in, thin)
-    sampler.plot_sample()
-    plt.show()
+    estimator = HOLIGlass(X, params=['J_glass', 'b'])
+    estimator.learn()
+    
+    estimator = HOLIGlass(X, params=['J_glass', 'b'], use_cuda=False)
+    estimator.learn()

@@ -1,5 +1,11 @@
 import numpy as np
+import torch
+from torch.autograd import Variable
+rng = np.random.RandomState()
 
-D_list = np.arange(10, 110, 10)
-N_list = np.arange(10, 160, 10)
-print(np.array(np.meshgrid(D_list, N_list)).T)
+D = 10**2
+N = 1
+
+X = rng.randint(2, size=(N, D)) * 2 - 1
+
+X_t = Variable(torch.from_numpy(X).type(torch.cuda.DoubleTensor))
