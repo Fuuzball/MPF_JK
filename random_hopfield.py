@@ -54,8 +54,8 @@ for d_i, D in enumerate(D_list):
 
         for i in range(n_attempts):
             try: 
-                #theta = model.learn(unflatten=False, theta0=1E-2, params=[{'lr' : 1, 'max_iter' : 100}])
-                theta = (X.T @ X).reshape(-1)
+                theta = model.learn(unflatten=False, theta0=1E-2, params=[{'lr' : 1, 'max_iter' : 100}])
+                #theta = (X.T @ X).reshape(-1)
             except KeyboardInterrupt:
                 raise
             except:
