@@ -197,9 +197,9 @@ class HOLIGlass(object):
             shape = self.param_shape[f_name]
             param = params[f_name]
             self.assert_param_shape(param, f_name, shape)
-            params_list.append(param.view(-1))
+            params_list.append(self.to_numpy(param.view(-1)))
 
-        return torch.cat(params_list)
+        return np.hstack(params_list)
 
     def unflatten_params(self, theta, numpy=False):
         theta = self.to_double_var(theta, 'theta')
@@ -363,7 +363,7 @@ class HOLIGlass(object):
         # Assign values
         dE = self.get_dE(theta)
         Knd = torch.exp(-0.5 * dE)
-        K = Knd.sum() 
+        K = Knd.mean() 
         return K
 
     def learn_sgd(self, unflatten=True):
@@ -383,11 +383,14 @@ class HOLIGlass(object):
         logger.info('Start fitting parameters...')
         t0 = time.time()
 
-        if theta0 is not None:
+        if isinstance(theta0, float):
+            theta = self.to_double_var(
+                        theta0 * self.flatten_params(self.get_random_params()), 'theta', requires_grad=True
+                    )
+        elif theta0 is not None:
             theta = theta0
         else:
-            theta = Variable(torch.zeros(self.num_params).double(), requires_grad=True)
-
+            theta = self.to_double_var(np.zeros(self.num_params))
 
         def f():
             optimizer.zero_grad()
