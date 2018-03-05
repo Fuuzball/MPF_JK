@@ -156,6 +156,12 @@ class HOLIGlass(object):
                 logger.error(f'Variable {arr_name} needs to be either np array or torch variable instead of {type(X)}')
                 sys.exit()
 
+    def to_numpy(self, X):
+        if self.USE_CUDA:
+            return X.data.cpu().numpy()
+        else:
+            return X.data.numpy()
+
     def assert_param_shape(self, param, name, shape):
         if not param.shape == shape:
             logger.error('Parameter {} has shape {} instead correct shape {}'.format(name, param.shape, shape))
@@ -317,7 +323,7 @@ class HOLIGlass(object):
 
         return dE
 
-    def get_dE(self, theta):
+    def get_dE(self, theta, to_numpy=False):
         logger.debug('Calling get_dE')
         params = self.unflatten_params(theta)
         logger.debug('-'*20 + 'params' + '-'*20 + '\n{}'.format(params))
@@ -346,7 +352,10 @@ class HOLIGlass(object):
         for k, m in zip(k_params, self.M):
             dE += self.dE_HOLI(k, m).view(self.N, -1)
 
-        return dE
+        if to_numpy:
+            return self.to_numpy(dE)
+        else:
+            return dE
 
     def K(self, theta):
         theta = self.to_double_var(theta, 'theta', requires_grad=True)

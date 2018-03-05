@@ -11,8 +11,9 @@ import os
 
 rng = np.random.RandomState(1)
 
-D_list = np.arange(10, 110, 10)
-N_list = np.arange(10, 160, 10)
+D_list = np.arange(1, 101)
+N_list = np.arange(1, 161)
+p = .5
 frac_min_arr = np.zeros((len(D_list), len(N_list)))
 
 
@@ -27,21 +28,27 @@ plot_path = os.path.join(path, 'min_frac_plot.png')
 
 with open(meta_data_path, 'w') as f:
     f.write(f'D: {D_list}\n')
-    f.write(f'N: {N_list}')
+    f.write(f'N: {N_list}\n')
+    f.write(f'p :{p}')
 
 for d_i, D in enumerate(D_list):
     for n_i, N in enumerate(N_list):
         print(D, N)
 
-        X = rng.randint(0, 2, size=(N, D)) * 2 - 1
+        #X = rng.randint(0, 2, size=(N, D)) * 2 - 1
+        X = rng.binomial(1, p, size=(N, D)) * 2 - 1
+        model = HOLIGlass(X, M=[], params=['J_glass'], use_cuda=False)
 
-        model = HOLIGlass(X, M=[], params=['J_glass'])
         
-        #theta = model.learn(unflatten=False, params=[{'lr' : .5, 'max_iter' : 100}])
-        theta = (X.T @ X).reshape(-1)
-        dE = model.get_dE(theta).data.numpy()
-        frac_min = (dE > 0).all(axis=1).sum()/N
-        frac_min_arr[d_i, n_i] = frac_min
+        try:
+            theta = model.learn(unflatten=False, params=[{'lr' : .5, 'max_iter' : 100}])
+            #theta = (X.T @ X).reshape(-1)
+            dE = model.get_dE(theta, to_numpy=True)
+            frac_min = (dE > 0).all(axis=1).sum()/N
+            frac_min_arr[d_i, n_i] = frac_min
+        except:
+            print('error in learning')
+            frac_min_arr[d_i, n_i] = 0
 
 np.save(npy_arr_path, frac_min_arr)
 

@@ -4,5 +4,6 @@ V Impliment torch gibbs sampler
 - Impliment torch SLMC
 V Impliment MPF estimator with multiple interactions 
 - Refactor MPF esitmators to not take X in initialization
-- Make hopfield object 
--- Get results for hopfield on random data
+V Make hopfield object 
+V- Get results for hopfield on random data
+- Fix the inf error when fitting (aroudn D ~ 100)
