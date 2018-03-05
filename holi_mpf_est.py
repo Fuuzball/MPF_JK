@@ -218,7 +218,6 @@ class HOLIGlass(object):
 
         return params
             
-    ## NOT BING USED ##
     def get_W(self, J):
         a = torch.Tensor([[4,1,0,1,4]])
         r2 = a + a.t()
@@ -227,7 +226,7 @@ class HOLIGlass(object):
         W[r2 == 2] = J[1]
         W[r2 == 4] = J[2]
         W[r2 == 5] = J[3]
-        return Variable(W.double(), requires_grad=False)
+        return self.to_double_var(W, arr_name='W', requires_grad=False)
 
     def get_corr_mat(self, k):
         J = [0, 0, 0, 0]

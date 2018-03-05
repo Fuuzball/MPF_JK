@@ -36,7 +36,7 @@ else:
     X_sample = X
 print(X_sample.shape)
 
-estimator = HOLIGlass(X_sample, params=['j_1', 'j_2', 'j_3', 'j_4', 'b'], M=M)
+estimator = HOLIGlass(X_sample, params=['j_1', 'j_2', 'j_3', 'j_4', 'b'], M=M, use_cuda=False)
 
 def f(prop):
     print (prop['n_iter'], prop['abs_grad_sum'], prop['loss'])
@@ -74,7 +74,7 @@ plt.colorbar()
 plt.subplot(224)
 plt.imshow(params['k_3'])
 plt.colorbar()
-print(params)
+#print(params)
 plt.show()
 #pickle.dump(params, open('params.p', 'wb'))
 
