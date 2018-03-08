@@ -1,12 +1,14 @@
 import numpy as np
-import torch
-from torch.autograd import Variable
+import time
+rng = np.random.RandomState(1)
 
-for i in range(3):
-    try:
-        print(1/(i * (i-1)))
-        break
-    except:
-        print(f'Attempt {i} failed')
-else:
-    print('asdfasd')
+N = 100
+D = 50
+p = .5
+
+X = rng.binomial(1, p, size=(N, D)) * 2 - 1
+
+
+d = 4
+dE_nmi = ((X@X.T)**d)[:, :, None] - ((X@X.T)[:, :, None] - 2 * X[:, None, :] * X[None, :, :])**d
+dE = dE_nmi.sum(axis=0)
