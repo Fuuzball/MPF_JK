@@ -33,13 +33,20 @@ def stack_X(X, ratio = 1.5, W = None, pad = 1):
 
 class HopfieldNetwork(object):
 
-    def __init__(self, D, theta, model):
+    def __init__(self, theta, model, shape_2d=None):
         self.logger = logger
         self.logger.info('Initializing HopfieldNetwork')
         self.theta = theta
-        self.D = D
+        self.D = model.D
         self.model = model
-        self.shape_2d = model.shape_2d
+        if shape_2d == None:
+            W = int(np.sqrt(self.D))
+            H = int(self.D / W)
+        else:
+            H, W = shape
+        self.H = H
+        self.W = W
+        self.shape_2d = (H, W)
 
     def is_local_min(self, X):
         self.model.X = X
@@ -66,10 +73,11 @@ class HopfieldNetwork(object):
         self.X_history = np.array(self.X_history)
 
         self.logger.info('Hopfield network converged in {:.4f}s after {} iterations'.format(time.process_time() - t0, n_iter))
-        return self.model.X_2d.data.numpy()[0]
+        return self.model.X.data.numpy()[0]
 
     def plot_sample(self, fname=None, ratio = 1.5, W = None, pad = 1):
 
+        print((-1, *self.shape_2d))
         X_stacked = stack_X(self.X_history.reshape((-1, *self.shape_2d)), ratio, W, pad)
         fig = plt.imshow(X_stacked, cmap='Greys_r')
         plt.axis('off')
@@ -90,23 +98,53 @@ if __name__ == '__main__':
 
     rng = np.random.RandomState(seed=10)
 
-    D = 20**2
-    X = rng.randint(2, size=(1, D)) * 2 - 1
-    X = (X_mnist[0] > 10) * 1.
-    X = X[None, :] * 2 - 1
+    #D = 20**2
+    N = 2000
+    #X = rng.randint(2, size=(1, D)) * 2 - 1
+    X = (X_mnist[:N] > 20) * 1.
+    def sample_mnist(n_samples, thres=20):
+        N_X = X_mnist.shape[0]
+        rand_idx = rng.choice(np.arange(N_X), n_samples, replace=False)
+        return (X_mnist[rand_idx] > thres) * 2 -1
+    X = X * 2 - 1
+    X = sample_mnist(N)
+
+    model = HOLIGlass(X, M=[], params=['J_glass'], use_cuda=True)
+    theta = (X.T @ X).flatten()
+    dE_model = model.get_dE(theta, to_numpy=True)
+    J = X.T @ X
+    J -= np.diag(np.diagonal(J))
+    dE = -2 * X @ (J)
+    print(dE_model)
+    print(dE)
+    print(np.where(dE_model != dE))
+
+
+    assert False
 
 
     
-    fit_params = ['J_glass', 'b']
-    model = HOLIGlass(X, params=fit_params, M=[])
-    params = model.get_random_params()
-    theta = model.flatten_params(params)
-    theta = model.learn(unflatten=False)
+    #model = HOLIGlass(X, params=fit_params, M=[], use_cuda=False)
+    model = HOLIGlass(X, M=[], params=['J_glass'], use_cuda=True)
+    print(model.X)
+    #theta = model.learn(unflatten=False)
+    def f(prop):
+        print (prop['n_iter'], prop['abs_grad_sum'], prop['loss'])
 
-    noise = np.random.binomial(1, .1, size=X.shape).astype(np.bool)
-    X_flip = X.copy()
-    X_flip[noise] *= -1
+    params = [
+            {'call_back' :f, 'history_size' : 20,  'lr' : 1, 'max_iter': 100}
+            ,{'call_back' :f, 'history_size' : 20,  'lr' : .1, 'max_iter': 200}
+            #,{'call_back' :f, 'history_size' : 1000,  'lr' : 1, 'max_iter': 20}
+            ]
+    theta = model.learn(unflatten=False, theta0=1E-4, params=params)
+    dE = (model.get_dE(theta, to_numpy=True))
+    print(theta)
+    print(dE)
+    print((dE > 0).all(axis=1).sum()/N)
 
-    hopfield = HopfieldNetwork(D, theta, model)
-    print(hopfield.is_local_min(X_flip))
-    print(hopfield.is_local_min(X))
+
+    #noise = np.random.binomial(1, .1, size=X.shape).astype(np.bool)
+    #hopfield = HopfieldNetwork(theta, model)
+    #hopfield.run_model(X[0][None, :])
+    #plt.imshow((dE < 0).sum(axis= 0).reshape((28, 28)))
+    #plt.show()

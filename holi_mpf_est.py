@@ -390,7 +390,7 @@ class HOLIGlass(object):
         elif theta0 is not None:
             theta = theta0
         else:
-            theta = self.to_double_var(np.zeros(self.num_params))
+            theta = self.to_double_var(np.zeros(self.num_params), requires_grad=True)
 
         def f():
             optimizer.zero_grad()

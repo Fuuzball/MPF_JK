@@ -21,7 +21,7 @@ rng = np.random.RandomState(1)
 #D_list = np.arange(1, 101, 10)
 D_list = np.arange(2, 11) ** 2
 N_list = np.arange(1, 401)
-p = .3
+p = .2
 method = 'MPF w/ K4'
 frac_min_arr = np.zeros((len(D_list), len(N_list)))
 
