@@ -18,11 +18,11 @@ logging.getLogger('torch_lbfgs.py').setLevel(logging.DEBUG)
 
 rng = np.random.RandomState(1)
 
-#D_list = np.arange(1, 101, 10)
-D_list = np.arange(2, 11) ** 2
-N_list = np.arange(1, 401)
-p = .2
-method = 'MPF w/ K4'
+D_list = np.arange(1, 800, 5)
+#D_list = np.arange(2, 11) ** 2
+N_list = np.arange(1, 160)
+p = .3
+method = 'OPR_4'
 frac_min_arr = np.zeros((len(D_list), len(N_list)))
 
 
@@ -54,21 +54,21 @@ for d_i, D in enumerate(D_list):
         print(D, N)
 
         X = rng.binomial(1, p, size=(N, D)) * 2 - 1
-        model = HOLIGlass(X, params=['J_glass'], use_cuda=False)
+        #model = HOLIGlass(X, params=['J_glass'], use_cuda=False)
 
         n_attempts = 3
 
         for i in range(n_attempts):
             try: 
-                theta = model.learn(unflatten=False, theta0=1E-2, params=[{'lr' : 1, 'max_iter' : 100}])
+                #theta = model.learn(unflatten=False, theta0=1E-2, params=[{'lr' : 1, 'max_iter' : 100}])
                 pass
             except KeyboardInterrupt:
                 raise
             except:
                 logger.warning(f'Attempt {i} at fitting failed, trying again with different initialization...')
             else:
-                dE = model.get_dE(theta, to_numpy=True)
-                #dE = get_ho_OPR_dE(4, X)
+                #dE = model.get_dE(theta, to_numpy=True)
+                dE = get_ho_OPR_dE(4, X)
                 frac_min = (dE > 0).all(axis=1).sum()/N
                 frac_min_arr[d_i, n_i] = frac_min
                 break

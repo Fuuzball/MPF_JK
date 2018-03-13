@@ -27,12 +27,11 @@ def sample_mnist(n_samples, thres=20):
     rand_idx = rng.choice(np.arange(N_X), n_samples, replace=False)
     return (X_mnist[rand_idx] > thres) * 2 -1
 
-print(sample_mnist(10))
 
-N_list = np.arange(1, 10, 1)
+N_list = np.arange(1, 20, 1)
 #method = 'OPR_2'
 method = 'OPR_ho_4'
-frac_min_arr = np.zeros_like(N_list)
+frac_min_arr = np.zeros_like(N_list, dtype=np.float)
 
 
 time_stamp = str(int(time.time()))
@@ -95,9 +94,8 @@ for n_i, N in enumerate(N_list):
         logger.warning(f'All attempts have failed, moving on to next set of parameters recording result as -1')
         frac_min_arr[n_i] = -1
 
-
-
 np.save(npy_arr_path, frac_min_arr)
 
+print(frac_min_arr)
 plt.plot(N_list, frac_min_arr)
 plt.savefig(plot_path)
