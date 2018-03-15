@@ -28,9 +28,11 @@ def sample_mnist(n_samples, thres=20):
     return (X_mnist[rand_idx] > thres) * 2 -1
 
 
-N_list = np.arange(1000, 1550, 10)
+N_list = np.arange(1000, 3000, 10)
+#N_list = np.arange(1, 101, 1)
 #method = 'OPR_2'
 #method = 'OPR_ho_4'
+#N_list = [2000]
 method = 'MPF_glass'
 frac_min_arr = np.zeros_like(N_list, dtype=np.float)
 
@@ -64,18 +66,18 @@ with open(meta_data_path, 'w') as f:
 for n_i, N in enumerate(N_list):
     print(N)
 
-    X = rng.binomial(1, p, size=(N, D)) * 2 - 1
-    #X = sample_mnist(N)
+    #X = rng.binomial(1, p, size=(N, D)) * 2 - 1
+    X = sample_mnist(N)
 
     n_attempts = 3
 
     for i in range(n_attempts):
         try: 
             if method == 'MPF_glass':
-                model = HOLIGlass(X, M=[], params=['J_glass'], use_cuda=True)
+                model = HOLIGlass(X, M=[], params=['J_glass', 'b'], use_cuda=True)
                 theta = model.learn(unflatten=False, theta0=1E-2, params=[{'lr' : 1, 'max_iter' : 100}])
             elif method == 'MPF_HOLI_4':
-                model = HOLIGlass(X, params=['J_glass'], use_cuda=True)
+                model = HOLIGlass(X, params=['J_glass', 'b'], use_cuda=True)
                 theta = model.learn(unflatten=False, theta0=1E-2, params=[{'lr' : 1, 'max_iter' : 100}])
         except KeyboardInterrupt:
             raise
