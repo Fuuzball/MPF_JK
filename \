@@ -19,10 +19,9 @@ logging.getLogger('torch_lbfgs.py').setLevel(logging.DEBUG)
 rng = np.random.RandomState(1)
 
 D_list = np.arange(1, 800, 5)
-D_list = [28**2]
 #D_list = np.arange(2, 11) ** 2
-N_list = np.arange(1, 2000, 5)
-p = .17
+N_list = np.arange(1, 160)
+p = .3
 method = 'MPF_glass'
 frac_min_arr = np.zeros((len(D_list), len(N_list)))
 
@@ -55,7 +54,7 @@ for d_i, D in enumerate(D_list):
         print(D, N)
 
         X = rng.binomial(1, p, size=(N, D)) * 2 - 1
-        model = HOLIGlass(X, M=[], params=['J_glass'], use_cuda=False)
+        model = HOLIGlass(X, params=['J_glass'], use_cuda=False)
 
         n_attempts = 3
 

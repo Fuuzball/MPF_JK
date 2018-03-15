@@ -28,10 +28,14 @@ def sample_mnist(n_samples, thres=20):
     return (X_mnist[rand_idx] > thres) * 2 -1
 
 
-N_list = np.arange(1, 20, 1)
+N_list = np.arange(1000, 1550, 10)
 #method = 'OPR_2'
-method = 'OPR_ho_4'
+#method = 'OPR_ho_4'
+method = 'MPF_glass'
 frac_min_arr = np.zeros_like(N_list, dtype=np.float)
+
+p = .17
+D = 28**2
 
 
 time_stamp = str(int(time.time()))
@@ -56,11 +60,12 @@ with open(meta_data_path, 'w') as f:
     f.write(f'N: {N_list}\n')
     f.write(f'method: {method}')
 
+
 for n_i, N in enumerate(N_list):
     print(N)
 
-    #X = rng.binomial(1, p, size=(N, D)) * 2 - 1
-    X = sample_mnist(N)
+    X = rng.binomial(1, p, size=(N, D)) * 2 - 1
+    #X = sample_mnist(N)
 
     n_attempts = 3
 
