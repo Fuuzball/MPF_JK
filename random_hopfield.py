@@ -16,6 +16,10 @@ datefmt='%d-%m-%Y:%H:%M:%S',
 level=logging.WARNING)
 logging.getLogger('torch_lbfgs.py').setLevel(logging.DEBUG)
 
+def sample_mnist(n_samples, thres=20):
+    rand_idx = rng.choice(np.arange(N_X), n_samples, replace=False)
+    return (X_mnist[rand_idx] > thres) * 2 -1
+
 rng = np.random.RandomState(1)
 
 D_list = np.arange(1, 800, 5)
@@ -23,9 +27,31 @@ D_list = [28**2]
 #D_list = np.arange(2, 11) ** 2
 N_list = np.arange(1, 2000, 5)
 p = .17
+p = .5
 method = 'MPF_glass'
 frac_min_arr = np.zeros((len(D_list), len(N_list)))
 
+p = .3
+N = 10000
+D = 100
+X = rng.binomial(1, p, size=(N, D)) * 2 - 1
+plt.imshow(X[0].reshape((10, 10)))
+plt.show()
+
+model = HOLIGlass(X, M=[], params=['J_glass', 'b'], use_cuda=False)
+theta = model.learn(unflatten=True, theta0=1E-2, params=[{'lr' : 1, 'max_iter' : 100}])
+
+if False:
+    J = theta['J_glass'].reshape(-1)
+    plt.hist(J, bins=50)
+    plt.show()
+
+J = theta['J_glass'].reshape((100, 100))
+plt.imshow(J)
+plt.colorbar()
+plt.show()
+
+assert False
 
 time_stamp = str(int(time.time()))
 dir_path = os.path.dirname(os.path.realpath(__file__))

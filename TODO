@@ -8,3 +8,16 @@ V Make hopfield object
 V- Get results for hopfield on random data
 V Fix the inf error when fitting (aroudn D ~ 100)
 - Fix convergence problem w/
+
+- MPF NN interaction for random for different p
+- check p vs 1 - p
+- plot p vs capacity
+- use third order
+- OPR Mnist bias
+- MNIST HO MPF
+
+- Classification
+- Generative model
+
+- Theory
+
