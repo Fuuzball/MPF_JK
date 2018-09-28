@@ -5,6 +5,8 @@ from scipy import optimize
 class MPF_Estimator(object):
 # Conventions: spins are symmetric: {-1,1}, energy is E = -0.5 x.T @ J @ X
 
+
+
     def __init__(self, X, JK0=None, fit_params=[1, 1, 1, 1, 1]):
         self.X = X
         self.JK_init = JK0
