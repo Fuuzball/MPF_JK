@@ -5,13 +5,19 @@ from matplotlib import cm
 import matplotlib.gridspec as gridspec
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+# Load OPR data
 dir_names = ['OPR_d_4_p_05',
         'OPR_d_4_p_04',
         'OPR_d_4_p_03']
 fnames = [ './data/random_capacity/{}/frac_min.npy'.format(d) for d in dir_names ]
 opr_datas = [np.load(f) for f in fnames]
-data = np.load('./data/random_capacity/OPR_d_4_p_03/frac_min.npy')
-#data = np.load('./data/random_capacity/OPR/frac_min.npy')
+
+# Load OPR data
+dir_names = ['HOLI_MPF_p_05',
+        'HOLI_MPF_p_04',
+        'HOLI_MPF_p_03']
+fnames = [ './data/random_capacity/{}/frac_min.npy'.format(d) for d in dir_names ]
+mpf_datas = [np.load(f) for f in fnames]
 
 def get_threshold_line(data, thres):
     threshold_data = []
@@ -26,11 +32,9 @@ def get_threshold_line(data, thres):
 
     return threshold_data
 
-
-
 fig = plt.figure(figsize=(8,4))
 
-ps = ['0.3', '0.4', '0.5']
+ps = ['0.5', '0.4', '0.3']
 gs = gridspec.GridSpec(2, 3)
 #fig, ax = plt.subplots()
 colors = ['green', 'blue', 'red']
@@ -55,10 +59,16 @@ for i, data in enumerate(opr_datas):
     fig.colorbar(im, cax=cax)
 
 ax = plt.subplot(gs[1, :])
-ax.plot(get_threshold_line(opr_datas[0], .95), color=colors[0], linewidth=1)
-ax.plot(get_threshold_line(opr_datas[1], .95), color=colors[1], linewidth=1)
-ax.plot(get_threshold_line(opr_datas[2], .95), color=colors[2], linewidth=1)
-ax.plot()
+ax.plot(get_threshold_line(opr_datas[0], .95), color=colors[0], linewidth=1, label='OPR p=0.5')
+ax.plot(get_threshold_line(opr_datas[1], .95), color=colors[1], linewidth=1, label='OPR p=0.4')
+ax.plot(get_threshold_line(opr_datas[2], .95), color=colors[2], linewidth=1, label='OPR p=0.3')
+
+mpf_x = [n**2 for n in range(2, 11)]
+ax.plot(mpf_x, get_threshold_line(mpf_datas[0], .95), color=colors[0], linestyle='None', marker='x', linewidth=1, label='MPF p=0.5')
+ax.plot(mpf_x, get_threshold_line(mpf_datas[1], .95), color=colors[1], linestyle='None', marker='x', linewidth=1, label='MPF p=0.4')
+ax.plot(mpf_x, get_threshold_line(mpf_datas[2], .95), color=colors[2], linestyle='None', marker='x', linewidth=1, label='MPF p=0.3')
+
+ax.legend(loc=2)
 
 plt.tight_layout()
 plt.show()
