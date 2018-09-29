@@ -73,7 +73,6 @@ class HOLIGlass(object):
 
         self.X = X
 
-
         if self.need_2d:
             # Make 2nd order correlations for local ising model
             for name in params:
@@ -129,6 +128,15 @@ class HOLIGlass(object):
     def X_2d(self):
         #return self.X.view((self.N, self.H, self.W))
         return self._X_2d
+
+    @property
+    def theta(self):
+        return self._theta
+
+    @theta.setter
+    def theta(self, new_theta):
+        self._theta = new_theta
+        self.params = self.unflatten_params(new_theta) 
     def to_double_var(self, X, arr_name='', requires_grad=False):
         if self.USE_CUDA:
             d_type = torch.cuda.DoubleTensor
@@ -376,12 +384,11 @@ class HOLIGlass(object):
                 optimizer.step(f)
 
         logger.info('Fitting took {:.4f}s'.format(time.time() - t0))
-        self.flat_params = theta
-        self.unflat_params = self.unflatten_params(theta, True)
+        self.theta = theta
         if unflatten:
-            return self.unflat_params
+            return self.params
         else:
-            return self.flat_params
+            return self.theta
     def learn_scipy(self):
         theta = Variable(torch.zeros(self.num_params).double(), requires_grad=True)
 
@@ -404,16 +411,12 @@ if __name__ == '__main__':
     datefmt='%d-%m-%Y:%H:%M:%S',
     level=logging.INFO)
     logging.getLogger('torch_lbfgs.py').setLevel(logging.DEBUG)
-    D = 10**2
+    D = 5**2
     N = int(1E5)
 
     rng = np.random.RandomState(seed=10)
 
     X = rng.randint(2, size=(N, D)) * 2 - 1
-    #estimator = HOLIGlass(X, params=['J_glass', 'b'])
-    #estimator.learn()
-    
-    estimator = HOLIGlass(X, params=['J_glass', 'b'], use_cuda=False)
-    params = estimator.learn()
-    print(params)
-    print(estimator.unflat_params)
+    estimator = HOLIGlass(X, params=['J_glass', 'b'])
+    estimator.learn()
+    print(estimator.params['J_glass'].shape)
