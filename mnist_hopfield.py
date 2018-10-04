@@ -33,6 +33,7 @@ N_list = np.arange(1000, 3000, 10)
 #method = 'OPR_2'
 #method = 'OPR_ho_4'
 #N_list = [2000]
+method = 'MPF_HOLI_4'
 method = 'MPF_glass'
 frac_min_arr = np.zeros_like(N_list, dtype=np.float)
 

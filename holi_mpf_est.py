@@ -1,4 +1,4 @@
-import torch
+import torch as th
 from torch import optim
 from torch_lbfgs import LBFGS
 from torch.autograd import Variable
@@ -23,8 +23,8 @@ def get_rand_J(D):
     J = J - np.diag(np.diagonal(J))
     return J
 
-def torch_double_var(npy_arry, grad=False):
-    return Variable(torch.from_numpy(npy_arry).double(), requires_grad=grad)
+def th_double_var(npy_arry, grad=False):
+    return Variable(th.from_numpy(npy_arry).double(), requires_grad=grad)
 
 def is_ndarray(arr):
     return isinstance(arr, np.ndarray) 
@@ -33,14 +33,17 @@ def is_Variable(arr):
     return isinstance(arr, Variable) 
 
 class HOLIGlass(object):
-    def __init__(self, X, shape_2d=None, M=None, params=['J_glass', 'b'], use_cuda=True):
+    def __init__(self, shape_2d=None, M=None, params=['J_glass', 'b'], use_cuda=True):
+        """
+        Build hopfield network with memories X
+        """
         logger.info('Initializing HOLIGlass...')
         self.N, self.D = X.shape
         self.corr_mats = OrderedDict()
         self.USE_CUDA = use_cuda
         if use_cuda:
             logger.info('Using CUDA')
-            torch.cuda.init()
+            th.cuda.init()
         else:
             logger.info('Using CPU')
 
@@ -70,8 +73,6 @@ class HOLIGlass(object):
             self.H = H
             self.W = W
             self.shape_2d = (H, W)
-
-        self.X = X
 
         if self.need_2d:
             # Make 2nd order correlations for local ising model
@@ -128,30 +129,28 @@ class HOLIGlass(object):
     def X_2d(self):
         #return self.X.view((self.N, self.H, self.W))
         return self._X_2d
-
     @property
     def theta(self):
         return self._theta
-
     @theta.setter
     def theta(self, new_theta):
         self._theta = new_theta
         self.params = self.unflatten_params(new_theta) 
     def to_double_var(self, X, arr_name='', requires_grad=False):
         if self.USE_CUDA:
-            d_type = torch.cuda.DoubleTensor
+            d_type = th.cuda.DoubleTensor
         else:
-            d_type = torch.DoubleTensor
+            d_type = th.DoubleTensor
 
         if is_ndarray(X):
-            return Variable(torch.from_numpy(X).type(d_type), requires_grad=requires_grad)
+            return Variable(th.from_numpy(X).type(d_type), requires_grad=requires_grad)
         elif is_Variable(X):
             return X.type(d_type)
         else:
             try:
                 return Variable(X.type(d_type), requires_grad=requires_grad)
             except:
-                logger.error(f'Variable {arr_name} needs to be either np array or torch variable instead of {type(X)}')
+                logger.error(f'Variable {arr_name} needs to be either np array or th variable instead of {type(X)}')
                 sys.exit()
     def to_numpy(self, X):
         if self.USE_CUDA:
@@ -173,7 +172,7 @@ class HOLIGlass(object):
             if p_name == 'J_glass':
                 param += param.T
                 np.fill_diagonal(param, 0)
-            #params[p_name] = torch_double_var(param, req_grad)
+            #params[p_name] = th_double_var(param, req_grad)
             params[p_name] = self.to_double_var(param, p_name, req_grad)
 
         return params
@@ -217,9 +216,9 @@ class HOLIGlass(object):
 
         return params
     def get_W(self, J):
-        a = torch.Tensor([[4,1,0,1,4]])
+        a = th.Tensor([[4,1,0,1,4]])
         r2 = a + a.t()
-        W = torch.zeros((5,5))
+        W = th.zeros((5,5))
         W[r2 == 1] = J[0]
         W[r2 == 2] = J[1]
         W[r2 == 4] = J[2]
@@ -236,22 +235,22 @@ class HOLIGlass(object):
         for name in self.corr_mats:
             k = int(name[2:])
             self.corr_mats[name] = self.get_corr_mat(k)
-    def dE_glass(self, J):
+    def dE_glass(self, J, X):
         logger.debug('Calling dE_glass')
-        if not torch.equal(J, J.t()):
+        if not th.equal(J, J.t()):
             logger.debug('J is not symmetric')
 
         # Enforce the matrix to be symmetric and have vanishing diagonals
         D = self.D
-        #mask = Variable((torch.ones((D,D)) - torch.eye(D)).double(), requires_grad=False)
-        mask = torch.ones((D, D)) - torch.eye(D)
+        #mask = Variable((th.ones((D,D)) - th.eye(D)).double(), requires_grad=False)
+        mask = th.ones((D, D)) - th.eye(D)
         mask = self.to_double_var(mask, 'mask')
         J_sym = 0.5 * (J.t() + J) * mask
-        dE = 2 * self.X * (self.X.mm(J_sym))
+        dE = 2 * X * (X.mm(J_sym))
         return dE
-    def dE_bias(self, b):
-        return -2 * self.X * b[None, :]
-    def dE_HOLI(self, K, M):
+    def dE_bias(self, b, X):
+        return -2 * X * b[None, :]
+    def dE_HOLI(self, K, M, X):
         logger.debug('Calling dE_HOLI')
         logger.debug('-'*20 + 'K' + '-'*20 + '\n{}'.format(K))
 
@@ -261,7 +260,7 @@ class HOLIGlass(object):
             Args:
                 M (np.array): A Binary (0, 1) matrix of aribtrary size M_H x M_W which sets the sites relevant for interaction.
                                 The number of ones in M, N_M is the order of interaction.
-                K (np.array): A (H - M_H + 1) x (W - M_W + 1) pytorch tensor denoting the coupling strength
+                K (np.array): A (H - M_H + 1) x (W - M_W + 1) pyth tensor denoting the coupling strength
 
             Returns energy difference due to flipping bits of X_2d in matrix of shape N x H x W
 
@@ -273,16 +272,18 @@ class HOLIGlass(object):
         # Flipped to do real convolution (as opposed to xcorrelation)
         M_flipped = M[::-1, ::-1].copy()
 
-        # Turn M into pytorch Variable
-        #M = torch_double_var(M, False)
+        # Turn M into pyth Variable
+        #M = th_double_var(M, False)
         M = self.to_double_var(M, 'M', False)
-        #M_flipped = torch_double_var(M_flipped, False)
+        #M_flipped = th_double_var(M_flipped, False)
         M_flipped = self.to_double_var(M, 'M', False)
 
         # Make convolution to count number of spin+ - spin-
+        X_2d =  X.view((self.N, self.H, self.W))
         XM = F.conv2d(
-                self.X_2d[:, None, :, :], M[None, None, :, :]
+                X_2d[:, None, :, :], M[None, None, :, :]
                 )
+
 
         # Get number of spin-
         N_minus = -(XM - N_M) / 2
@@ -291,7 +292,7 @@ class HOLIGlass(object):
         Q = 2 * (N_minus % 2 == 0).double() - 1
 
         # Energy contribution to interaction at each position
-        #K = Variable(torch.from_numpy(K), requires_grad=True)
+        #K = Variable(th.from_numpy(K), requires_grad=True)
         E = K * Q
 
         # Convolve with inverted matrix M to get dE
@@ -301,7 +302,7 @@ class HOLIGlass(object):
                 )
 
         return dE
-    def get_dE(self, theta, to_numpy=False):
+    def get_dE(self, theta, X, to_numpy=False):
         logger.debug('Calling get_dE')
         params = self.unflatten_params(theta)
         logger.debug('-'*20 + 'params' + '-'*20 + '\n{}'.format(params))
@@ -311,12 +312,12 @@ class HOLIGlass(object):
         # Energy due to bias
         if 'b' in params:
             b = params['b']
-            dE += self.dE_bias(b)
+            dE += self.dE_bias(b, X)
 
         # Energy due to ising glass
         if 'J_glass' in params:
             J = params['J_glass']
-            dE += self.dE_glass(J)
+            dE += self.dE_glass(J, X)
 
         # Energy due to fixed, local, second interaction
         for p in params:
@@ -328,35 +329,24 @@ class HOLIGlass(object):
         # Energy due to higher order local interaction
         k_params = [params[p] for p in params if 'k_' in p]
         for k, m in zip(k_params, self.M):
-            dE += self.dE_HOLI(k, m).view(self.N, -1)
+            dE += self.dE_HOLI(k, m, X).view(self.N, -1)
 
         if to_numpy:
             return self.to_numpy(dE)
         else:
             return dE
-    def K(self, theta):
+    def K(self, theta, X):
         theta = self.to_double_var(theta, 'theta', requires_grad=True)
-        #theta = torch_double_var(theta_npy_arr, True)
+        #theta = th_double_var(theta_npy_arr, True)
         # Assign values
-        dE = self.get_dE(theta)
-        Knd = torch.exp(-0.5 * dE)
+        dE = self.get_dE(theta, X)
+        Knd = th.exp(-0.5 * dE)
         K = Knd.mean() 
         return K
-    def learn_sgd(self, unflatten=True):
-        theta = Variable(torch.zeros(self.num_params).double(), requires_grad=True)
-        optimizer = optim.SGD([theta], lr =.0001)
-
-        for _ in range(10):
-            self.K(theta).backward()
-            optimizer.step()
-
-        if unflatten:
-            return self.unflatten_params(theta)
-        else:
-            return theta
-    def learn(self, unflatten=True, theta0=None, params=None):
+    def learn(self, X, unflatten=True, theta0=None, params=None):
         logger.info('Start fitting parameters...')
         t0 = time.time()
+        X = self.to_double_var(X, 'X')
 
         if isinstance(theta0, float):
             theta = self.to_double_var(
@@ -369,7 +359,7 @@ class HOLIGlass(object):
 
         def f():
             optimizer.zero_grad()
-            loss = self.K(theta)
+            loss = self.K(theta, X)
             loss.backward()
             return loss
 
@@ -389,11 +379,24 @@ class HOLIGlass(object):
             return self.params
         else:
             return self.theta
+    # Alternative learning algorithms need to be refactored to include X
+    def learn_sgd(elf, unflatten=True):
+        theta = Variable(th.zeros(self.num_params).double(), requires_grad=True)
+        optimizer = optim.SGD([theta], lr =.0001)
+
+        for _ in range(10):
+            self.K(theta).backward()
+            optimizer.step()
+
+        if unflatten:
+            return self.unflatten_params(theta)
+        else:
+            return theta
     def learn_scipy(self):
-        theta = Variable(torch.zeros(self.num_params).double(), requires_grad=True)
+        theta = Variable(th.zeros(self.num_params).double(), requires_grad=True)
 
         def f(theta):
-            theta = torch_double_var(theta, True)
+            theta = th_double_var(theta, True)
             theta = self.to_double_var(theta, 'theta', True)
             loss = self.K(theta)
             loss.backward()
@@ -405,18 +408,28 @@ class HOLIGlass(object):
         self.unflat_params = self.unflatten_params(estimate, True)
 
         return self.unflatten_params(estimate, True)
+    def get_frac_capacity(self, noise=0):
+        """
+        Return fraction of memories that are at local minimum
+        """
+        noise = rng.binomial(1, noise, size=(self.X.shape))
+        dE = self.get_dE(self.theta, to_numpy=True)
+        frac_min = (dE > 0).all(axis=1).sum()/self.N
+        return frac_min
+
 
 if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
     datefmt='%d-%m-%Y:%H:%M:%S',
     level=logging.INFO)
-    logging.getLogger('torch_lbfgs.py').setLevel(logging.DEBUG)
-    D = 5**2
-    N = int(1E5)
+    logging.getLogger('th_lbfgs.py').setLevel(logging.DEBUG)
+    D = 10**2
+    N = int(1E2)
 
-    rng = np.random.RandomState(seed=10)
+    rng = np.random.RandomState(seed=0)
 
     X = rng.randint(2, size=(N, D)) * 2 - 1
-    estimator = HOLIGlass(X, params=['J_glass', 'b'])
-    estimator.learn()
-    print(estimator.params['J_glass'].shape)
+    X = th_double_var(X)
+
+    estimator = HOLIGlass(params=['J_glass', 'b'])
+    estimator.learn(X)
