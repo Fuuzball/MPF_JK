@@ -113,22 +113,23 @@ class HOLIGlass(object):
             param_shape['k_%d'%n] = (k_h, k_w)
 
         return param_shape
-    @property
-    def X(self):
-        return self._X
-    @X.setter
-    def X(self, new_X):
-        self._X = self.to_double_var(new_X, 'X')
-        if len(self._X.shape) == 1:
-            self._X = self._X[None, :]
+    if False:
+        @property
+        def X(self):
+            return self._X
+        @X.setter
+        def X(self, new_X):
+            self._X = self.to_double_var(new_X, 'X')
+            if len(self._X.shape) == 1:
+                self._X = self._X[None, :]
 
-        if self.need_2d:
-            self._X_2d =  self._X.view((self.N, self.H, self.W))
-            self.update_corr_mat()
-    @property
-    def X_2d(self):
-        #return self.X.view((self.N, self.H, self.W))
-        return self._X_2d
+            if self.need_2d:
+                self._X_2d =  self._X.view((self.N, self.H, self.W))
+                self.update_corr_mat()
+        @property
+        def X_2d(self):
+            #return self.X.view((self.N, self.H, self.W))
+            return self._X_2d
     @property
     def theta(self):
         return self._theta
@@ -408,12 +409,17 @@ class HOLIGlass(object):
         self.unflat_params = self.unflatten_params(estimate, True)
 
         return self.unflatten_params(estimate, True)
-    def get_frac_capacity(self, noise=0):
+    def get_frac_capacity(self, X, noise_p=0):
         """
-        Return fraction of memories that are at local minimum
+        Return fraction of memories (X) that are stored as local minima. Noise can be added by setting parameter noise_p
         """
-        noise = rng.binomial(1, noise, size=(self.X.shape))
-        dE = self.get_dE(self.theta, to_numpy=True)
+        noise = rng.binomial(1, noise_p, size=(X.shape))
+
+        noise = self.to_double_var(noise)
+        X = self.to_double_var(X)
+        X_noisy = X + noise
+
+        dE = self.get_dE(self.theta, X_noisy, to_numpy=True)
         frac_min = (dE > 0).all(axis=1).sum()/self.N
         return frac_min
 
@@ -424,7 +430,7 @@ if __name__ == '__main__':
     level=logging.INFO)
     logging.getLogger('th_lbfgs.py').setLevel(logging.DEBUG)
     D = 10**2
-    N = int(1E2)
+    N = int(1.2E2)
 
     rng = np.random.RandomState(seed=0)
 
@@ -433,3 +439,4 @@ if __name__ == '__main__':
 
     estimator = HOLIGlass(params=['J_glass', 'b'])
     estimator.learn(X)
+    print(estimator.get_frac_capacity(X, 0.01))

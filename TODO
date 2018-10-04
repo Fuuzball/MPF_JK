@@ -3,7 +3,7 @@ VWrite sampler for arbitrary HOLI (higher order local interaction)
 V Impliment torch gibbs sampler
 - Impliment torch SLMC
 V Impliment MPF estimator with multiple interactions 
-- Refactor MPF esitmators to not take X in initialization
+V Refactor MPF esitmators to not take X in initialization
 V Make hopfield object 
 V- Get results for hopfield on random data
 V Fix the inf error when fitting (aroudn D ~ 100)
