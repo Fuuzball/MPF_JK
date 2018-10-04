@@ -28,13 +28,14 @@ def sample_mnist(n_samples, thres=20):
     return (X_mnist[rand_idx] > thres) * 2 -1
 
 
-N_list = np.arange(1000, 3000, 10)
+N_list = np.arange(10, 1000, 10)
 #N_list = np.arange(1, 101, 1)
 #method = 'OPR_2'
 #method = 'OPR_ho_4'
 #N_list = [2000]
 method = 'MPF_HOLI_4'
-method = 'MPF_glass'
+#method = 'MPF_glass'
+noise = 0.05
 frac_min_arr = np.zeros_like(N_list, dtype=np.float)
 
 p = .17
@@ -61,7 +62,8 @@ plot_path = os.path.join(path, 'min_frac_plot.png')
 
 with open(meta_data_path, 'w') as f:
     f.write(f'N: {N_list}\n')
-    f.write(f'method: {method}')
+    f.write(f'method: {method}\n')
+    f.write(f'noise: {noise}')
 
 
 for n_i, N in enumerate(N_list):
@@ -75,11 +77,11 @@ for n_i, N in enumerate(N_list):
     for i in range(n_attempts):
         try: 
             if method == 'MPF_glass':
-                model = HOLIGlass(X, M=[], params=['J_glass', 'b'], use_cuda=True)
-                theta = model.learn(unflatten=False, theta0=1E-2, params=[{'lr' : 1, 'max_iter' : 100}])
+                model = HOLIGlass(X.shape, M=[], params=['J_glass', 'b'], use_cuda=True)
+                theta = model.learn(X, unflatten=False, theta0=1E-2, params=[{'lr' : 1, 'max_iter' : 100}])
             elif method == 'MPF_HOLI_4':
-                model = HOLIGlass(X, params=['J_glass', 'b'], use_cuda=True)
-                theta = model.learn(unflatten=False, theta0=1E-2, params=[{'lr' : 1, 'max_iter' : 100}])
+                model = HOLIGlass(X.shape, params=['J_glass', 'b'], use_cuda=True)
+                theta = model.learn(X, unflatten=False, theta0=1E-2, params=[{'lr' : 1, 'max_iter' : 100}])
         except KeyboardInterrupt:
             raise
         except:
@@ -92,9 +94,11 @@ for n_i, N in enumerate(N_list):
                 J -= np.diag(np.diagonal(J))
                 dE = 2 * X @ (J)
             else:
-                dE = model.get_dE(theta, to_numpy=True)
+                #dE = model.get_dE(theta, to_numpy=True)
+                frac_min = model.get_frac_capacity(X, noise_p=noise)
 
-            frac_min = (dE > 0).all(axis=1).sum()/N
+
+            #frac_min = (dE > 0).all(axis=1).sum()/N
             frac_min_arr[n_i] = frac_min
             print(frac_min)
             break

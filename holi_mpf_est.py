@@ -11,6 +11,8 @@ import sys
 from collections import OrderedDict
 
 logger = logging.getLogger(__name__)
+seed=None
+rng = np.random.RandomState(seed=seed)
 
 
 def get_rand_J(D):
@@ -33,12 +35,12 @@ def is_Variable(arr):
     return isinstance(arr, Variable) 
 
 class HOLIGlass(object):
-    def __init__(self, shape_2d=None, M=None, params=['J_glass', 'b'], use_cuda=True):
+    def __init__(self, shape, shape_2d=None, M=None, params=['J_glass', 'b'], use_cuda=True):
         """
         Build hopfield network with memories X
         """
         logger.info('Initializing HOLIGlass...')
-        self.N, self.D = X.shape
+        self.N, self.D = shape
         self.corr_mats = OrderedDict()
         self.USE_CUDA = use_cuda
         if use_cuda:
@@ -430,13 +432,18 @@ if __name__ == '__main__':
     level=logging.INFO)
     logging.getLogger('th_lbfgs.py').setLevel(logging.DEBUG)
     D = 10**2
-    N = int(1.2E2)
+    N = int(1.1E2)
 
-    rng = np.random.RandomState(seed=0)
 
     X = rng.randint(2, size=(N, D)) * 2 - 1
     X = th_double_var(X)
 
     estimator = HOLIGlass(params=['J_glass', 'b'])
     estimator.learn(X)
+    print(estimator.get_frac_capacity(X, 0.00))
+    print(estimator.get_frac_capacity(X, 0.01))
+
+    estimator = HOLIGlass(M=[], params=['J_glass', 'b'])
+    estimator.learn(X)
+    print(estimator.get_frac_capacity(X, 0.00))
     print(estimator.get_frac_capacity(X, 0.01))
